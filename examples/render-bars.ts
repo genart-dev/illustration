@@ -598,8 +598,8 @@ const bars: BarSpec[] = [
       const segments = generateTreeSegments(
         W / 2, H - PAD,   // start at bottom center
         -Math.PI / 2,      // grow upward
-        80, 16, 0, 4,      // length, width, depth, maxDepth
-        Math.PI / 5,        // fork angle (36°)
+        70, 18, 0, 5,      // length, width, depth, maxDepth (more levels)
+        Math.PI / 6,        // fork angle (30°, tighter for more visible tips)
       );
       clearCanvas(before);
       addLabel(before, "Bar 10: Before — raw overlapping segments");
@@ -627,8 +627,8 @@ const bars: BarSpec[] = [
       // Same tree but with a wider trunk base
       const baseSegments = generateTreeSegments(
         W / 2, H - PAD, -Math.PI / 2,
-        80, 16, 0, 3,
-        Math.PI / 5,
+        70, 18, 0, 4,
+        Math.PI / 6,
       );
       // Add a flared base segment
       const flareSegments: TurtleSegment[] = [
@@ -1129,15 +1129,29 @@ const bars: BarSpec[] = [
       const region = leafPolygon(W / 2, H / 2, 200, 100);
 
       clearCanvas(before);
-      addLabel(before, "Bar 26: Before — solid gradient fill");
-      // Simulate gradient with strips
-      for (let x = PAD; x < W - PAD; x += 4) {
+      addLabel(before, "Bar 26: Before — solid gradient in oval");
+      // Draw the oval outline and fill with gradient
+      before.save();
+      before.beginPath();
+      before.moveTo(region[0]!.x, region[0]!.y);
+      for (const p of region) before.lineTo(p.x, p.y);
+      before.closePath();
+      before.clip();
+      for (let x = PAD; x < W - PAD; x += 3) {
         const t = (x - PAD) / (W - 2 * PAD);
         before.fillStyle = FG;
-        before.globalAlpha = 0.1 + t * 0.5;
-        before.fillRect(x, PAD, 4, H - 2 * PAD);
+        before.globalAlpha = 0.05 + t * 0.45;
+        before.fillRect(x, 0, 3, H);
       }
+      before.restore();
       before.globalAlpha = 1;
+      before.strokeStyle = FG;
+      before.lineWidth = 1;
+      before.beginPath();
+      before.moveTo(region[0]!.x, region[0]!.y);
+      for (const p of region) before.lineTo(p.x, p.y);
+      before.closePath();
+      before.stroke();
 
       clearCanvas(after);
       addLabel(after, "Bar 26: After — crosshatchFill with gradient");
@@ -1161,46 +1175,52 @@ const bars: BarSpec[] = [
   },
   {
     id: 27,
-    name: "Stipple Density Gradient",
+    name: "Stipple Density Comparison",
     group: "phase-3-fills-variations",
     render(before, after) {
       const rng = mulberry32(800);
-      const region = leafPolygon(W / 2, H / 2, 200, 110);
+
+      // Three separate oval regions side by side
+      const ovals = [
+        leafPolygon(W * 0.2, H / 2, 80, 100),
+        leafPolygon(W * 0.5, H / 2, 80, 100),
+        leafPolygon(W * 0.8, H / 2, 80, 100),
+      ];
+      const densities = [0.2, 0.5, 0.9];
 
       clearCanvas(before);
-      addLabel(before, "Bar 27: Before — solid gradient");
-      for (let x = PAD; x < W - PAD; x += 4) {
-        const t = (x - PAD) / (W - 2 * PAD);
+      addLabel(before, "Bar 27: Before — solid fills at 3 opacities");
+      for (let i = 0; i < 3; i++) {
         before.fillStyle = FG;
-        before.globalAlpha = t * 0.5;
-        before.fillRect(x, PAD, 4, H - 2 * PAD);
+        before.globalAlpha = densities[i]! * 0.5;
+        before.beginPath();
+        before.moveTo(ovals[i]![0]!.x, ovals[i]![0]!.y);
+        for (const p of ovals[i]!) before.lineTo(p.x, p.y);
+        before.closePath();
+        before.fill();
       }
       before.globalAlpha = 1;
 
       clearCanvas(after);
       addLabel(after, "Bar 27: After — stippleFill, 3 densities");
-      // Three overlapping regions with different densities
-      const densities = [0.2, 0.5, 0.9];
-      const xOffsets = [-130, 0, 130];
       for (let i = 0; i < 3; i++) {
-        const subRegion = leafPolygon(W / 2 + xOffsets[i]!, H / 2, 110, 90);
         const config: FillConfig = {
           density: densities[i]!,
           weight: 1.2,
           angle: 0,
         };
-        const marks = stippleFill.generateFill(subRegion, config, rng);
+        const marks = stippleFill.generateFill(ovals[i]!, config, rng);
         renderMarks(after, marks, FG, BG);
         after.strokeStyle = "#bbb";
         after.lineWidth = 0.5;
         after.beginPath();
-        after.moveTo(subRegion[0]!.x, subRegion[0]!.y);
-        for (const p of subRegion) after.lineTo(p.x, p.y);
+        after.moveTo(ovals[i]![0]!.x, ovals[i]![0]!.y);
+        for (const p of ovals[i]!) after.lineTo(p.x, p.y);
         after.closePath();
         after.stroke();
         after.fillStyle = "#999";
         after.font = "10px monospace";
-        after.fillText(`${densities[i]!}`, W / 2 + xOffsets[i]! - 12, H / 2 + 100);
+        after.fillText(`${densities[i]!}`, W * (0.2 + i * 0.3) - 12, H / 2 + 110);
       }
     },
   },
@@ -1273,6 +1293,192 @@ const bars: BarSpec[] = [
         after.fillStyle = "#999";
         after.font = "10px monospace";
         after.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 25);
+      }
+    },
+  },
+
+  // ── Atmospheric Depth Bars (29-31) ──
+
+  {
+    id: 29,
+    name: "Ink at Three Distances",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1100);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 29: Before — same branch, uniform weight");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 29: After — ink at foreground/mid/background");
+
+      const distances = [
+        { label: "foreground", weight: 8, opacity: 1.0, widthScale: 1.0, y: 55 },
+        { label: "midground", weight: 4, opacity: 0.6, widthScale: 0.6, y: 145 },
+        { label: "background", weight: 1.5, opacity: 0.3, widthScale: 0.3, y: 235 },
+      ];
+
+      for (const d of distances) {
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 32; i++) {
+          const t = i / 32;
+          pts.push({
+            x: PAD + 60 + t * (W - 2 * PAD - 120),
+            y: d.y + 20 * Math.sin(t * Math.PI * 2),
+            width: 4 * d.widthScale,
+          });
+        }
+        const profile: StrokeProfile = { points: pts, cap: "round" };
+
+        // Before: same weight for all
+        before.strokeStyle = FG;
+        before.lineWidth = 8;
+        before.lineCap = "round";
+        before.beginPath();
+        before.moveTo(pts[0]!.x, pts[0]!.y);
+        for (const p of pts) before.lineTo(p.x, p.y);
+        before.stroke();
+        before.fillStyle = "#999";
+        before.font = "10px monospace";
+        before.fillText(d.label, PAD + 4, d.y - 5);
+
+        // After: distance-modulated
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const config: MarkConfig = {
+          density: 0.8,
+          weight: d.weight,
+          jitter: 0.4,
+        };
+        const marks = inkMark.generateMarks(outline, profile, config, rng);
+        // Apply distance-based opacity
+        const fadedMarks = marks.map(m => ({
+          ...m,
+          opacity: m.opacity * d.opacity,
+        }));
+        renderMarks(after, fadedMarks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(d.label, PAD + 4, d.y - 5);
+      }
+    },
+  },
+  {
+    id: 30,
+    name: "Engraving at Three Distances",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1200);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 30: Before — same oval, uniform fill");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 30: After — engraving hatching, 3 distances");
+
+      const distances = [
+        { label: "fg", density: 0.9, weight: 1.2, opacity: 1.0, x: W * 0.2 },
+        { label: "mid", density: 0.5, weight: 0.8, opacity: 0.6, x: W * 0.5 },
+        { label: "bg", density: 0.2, weight: 0.4, opacity: 0.25, x: W * 0.8 },
+      ];
+
+      for (const d of distances) {
+        const region = leafPolygon(d.x, H / 2, 75, 95);
+
+        // Before: same solid fill
+        before.fillStyle = FG;
+        before.globalAlpha = 0.3;
+        before.beginPath();
+        before.moveTo(region[0]!.x, region[0]!.y);
+        for (const p of region) before.lineTo(p.x, p.y);
+        before.closePath();
+        before.fill();
+        before.globalAlpha = 1;
+
+        // After: distance-modulated hatching
+        const config: FillConfig = {
+          density: d.density,
+          weight: d.weight,
+          angle: Math.PI / 4,
+        };
+        const marks = hatchFill.generateFill(region, config, rng);
+        const fadedMarks = marks.map(m => ({
+          ...m,
+          opacity: m.opacity * d.opacity,
+        }));
+        renderMarks(after, fadedMarks, FG, BG);
+        // Outline at distance-appropriate weight
+        after.strokeStyle = FG;
+        after.globalAlpha = d.opacity;
+        after.lineWidth = d.weight;
+        after.beginPath();
+        after.moveTo(region[0]!.x, region[0]!.y);
+        for (const p of region) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.stroke();
+        after.globalAlpha = 1;
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(d.label, d.x - 8, H / 2 + 110);
+      }
+    },
+  },
+  {
+    id: 31,
+    name: "Tree at Three Distances",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1300);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 31: Before — same tree, uniform weight");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 31: After — tree outline, 3 distances");
+
+      const distances = [
+        { label: "fg", scale: 1.0, weightScale: 1.0, opacity: 1.0, x: W * 0.18 },
+        { label: "mid", scale: 0.65, weightScale: 0.5, opacity: 0.55, x: W * 0.5 },
+        { label: "bg", scale: 0.35, weightScale: 0.2, opacity: 0.2, x: W * 0.82 },
+      ];
+
+      for (const d of distances) {
+        const treeY = H - PAD;
+        const len = 50 * d.scale;
+        const w = 12 * d.scale;
+        const maxD = d.scale > 0.6 ? 4 : d.scale > 0.3 ? 3 : 2;
+
+        const segments = generateTreeSegments(
+          d.x, treeY, -Math.PI / 2,
+          len, w, 0, maxD,
+          Math.PI / 5,
+        );
+
+        // Before: same weight for all
+        renderSegmentsBefore(before, segments);
+        before.fillStyle = "#999";
+        before.font = "10px monospace";
+        before.fillText(d.label, d.x - 8, PAD + 10);
+
+        // After: distance-modulated outlines
+        const merged = mergeSegmentTree(segments, {
+          weightScale: d.weightScale,
+          tipTaper: 6 * d.scale,
+        });
+        after.fillStyle = FG;
+        after.globalAlpha = d.opacity;
+        for (const branch of merged) {
+          if (branch.outline.length < 3) continue;
+          after.beginPath();
+          after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
+          for (const p of branch.outline) after.lineTo(p.x, p.y);
+          after.closePath();
+          after.fill();
+        }
+        after.globalAlpha = 1;
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(d.label, d.x - 8, PAD + 10);
       }
     },
   },

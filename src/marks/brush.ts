@@ -2,20 +2,16 @@
  * Brush / sumi-e mark strategy — wide strokes with wet/dry variation.
  *
  * Quality Bar 16: Wide stroke with visible thick→thin transition.
- * Dry-brush texture at fast sections (stroke breaks up into parallel
- * filaments). Wet pooling at slow sections (endpoints, direction changes).
- * Leaf is a single gestural stroke. Fails if uniform width or looks
- * like a filled polygon.
- *
- * Based on sumi-e patterns from plugin-plants: pressure-like tapering
- * (1.2× start → 0.3× end), edge wobble, ink pooling dots, selective
- * restraint (skip fine branches).
+ * Thick at start (ink loaded), tapering thin at end (brush lifting/dry).
+ * Dry-brush texture in the trailing half — stroke breaks into 3-5 thin
+ * parallel filaments. Wet pooling dot at start. Fails if uniform width,
+ * if filaments look messy, or if it looks like a filled polygon.
  */
 
 import type {
   StrokeOutline, StrokeProfile, Mark, MarkConfig, MarkStrategy, Point2D,
 } from "../types.js";
-import { tangent, normalLeft, dist } from "../util/vec.js";
+import { tangent, normalLeft } from "../util/vec.js";
 import { cumulativeArcLengths } from "../util/arc-length.js";
 
 export const brushMark: MarkStrategy = {
@@ -35,13 +31,8 @@ export const brushMark: MarkStrategy = {
     const cumLengths = cumulativeArcLengths(points);
     const totalLength = cumLengths[cumLengths.length - 1]!;
 
-    // 1. Main brush stroke — rendered as the filled outline polygon plus
-    // edge wobble marks for bristle texture. The outline provides the
-    // thick→thin taper via the profile's per-point width.
-    const startW = config.weight * 1.4;
-    const endW = config.weight * 0.25;
-
-    // Build the main filled stroke from the outline (already passed in)
+    // 1. Main filled stroke — the outline polygon provides thick→thin taper.
+    // Rendered at moderate opacity so filaments can layer on top.
     {
       const poly: Point2D[] = [];
       for (const p of outline.startCap) poly.push(p);
@@ -52,126 +43,102 @@ export const brushMark: MarkStrategy = {
         marks.push({
           points: poly,
           width: 0, // filled polygon
-          opacity: 0.55 + rng() * 0.15,
+          opacity: 0.6 + rng() * 0.1,
         });
       }
     }
 
-    // Edge wobble marks — short strokes along both edges for bristle texture
-    const wobbleCount = Math.max(3, Math.floor(points.length / 8));
-    for (let w = 0; w < wobbleCount; w++) {
-      const edgePts = rng() > 0.5 ? outline.left : outline.right;
-      if (edgePts.length < 4) continue;
-      const startIdx = Math.floor(rng() * (edgePts.length - 3));
-      const len = 2 + Math.floor(rng() * 3);
-      const endIdx = Math.min(startIdx + len, edgePts.length - 1);
-      const wobblePts: Point2D[] = [];
-      for (let i = startIdx; i <= endIdx; i++) {
-        const p = edgePts[i]!;
-        wobblePts.push({
-          x: p.x + (rng() - 0.5) * 2,
-          y: p.y + (rng() - 0.5) * 2,
-        });
-      }
-      if (wobblePts.length >= 2) {
+    // 2. Wet reinforcement — a thick centerline stroke in the first 40%
+    // (where the brush is loaded with ink). Darker and slightly wider
+    // than the outline to simulate wet-on-wet ink buildup.
+    {
+      const wetEnd = Math.floor(points.length * 0.45);
+      if (wetEnd > 1) {
+        const wetPts: Point2D[] = [];
+        for (let i = 0; i <= wetEnd; i++) {
+          const pt = points[i]!;
+          // Slight wobble for brush hair texture
+          let wx = 0, wy = 0;
+          if (i > 0 && i < points.length - 1) {
+            const tan = tangent(points[i - 1]!, points[i + 1]!);
+            const n = normalLeft(tan);
+            wx = n.x * (rng() - 0.5) * config.weight * 0.06;
+            wy = n.y * (rng() - 0.5) * config.weight * 0.06;
+          }
+          wetPts.push({ x: pt.x + wx, y: pt.y + wy });
+        }
+        // Width follows the profile but slightly thicker
+        const midW = points[Math.floor(wetEnd / 2)]!.width * 1.8;
         marks.push({
-          points: wobblePts,
-          width: config.weight * 0.15,
-          opacity: 0.3 + rng() * 0.3,
+          points: wetPts,
+          width: Math.min(midW, config.weight * 1.2),
+          opacity: 0.35 + rng() * 0.15,
         });
       }
     }
 
-    // 2. Dry-brush filaments — at fast/thin sections, the stroke breaks
-    // into parallel lines (bristle marks visible).
-    // 5-8 filaments spread across the stroke width for visible breakup.
-    const filamentCount = Math.floor(config.density * 5) + 3;
+    // 3. Dry-brush filaments — 3-5 thin parallel lines in the trailing
+    // portion where the brush runs dry. Each filament follows the
+    // centerline with a fixed perpendicular offset.
+    const filamentCount = Math.max(3, Math.floor(config.density * 3) + 2);
+    const dryStart = 0.4; // filaments start here
 
     for (let f = 0; f < filamentCount; f++) {
-      const filamentPoints: Point2D[] = [];
-      // Spread filaments across the full stroke width
+      // Evenly spread across the stroke width at the dry section
       const normalizedF = (f - (filamentCount - 1) / 2) / ((filamentCount - 1) / 2 || 1);
-      const baseOffset = normalizedF * config.weight * 0.6;
+      const filamentPts: Point2D[] = [];
 
       for (let i = 0; i < points.length; i++) {
-        const pt = points[i]!;
         const t = totalLength > 0 ? cumLengths[i]! / totalLength : 0;
+        if (t < dryStart) continue;
 
-        // Dry-brush effect: filaments begin around t=0.3, fully separated by t=0.6
-        if (t < 0.3) continue;
-        const dryness = Math.min(1, (t - 0.3) / 0.3);
+        const pt = points[i]!;
 
-        // Probabilistic gaps — brush bristles separate more as stroke dries
-        if (rng() < 0.2 * config.jitter * dryness) {
-          if (filamentPoints.length >= 2) {
-            marks.push({
-              points: [...filamentPoints],
-              width: config.weight * 0.25,
-              opacity: 0.4 + rng() * 0.35,
-            });
-          }
-          filamentPoints.length = 0;
-          continue;
-        }
+        // Filament offset: spread proportional to stroke width at this point,
+        // scaled by how far into the dry section we are
+        const dryT = Math.min(1, (t - dryStart) / (1 - dryStart));
+        const spread = pt.width * (0.4 + 0.5 * dryT);
 
-        let ox = 0;
-        let oy = 0;
+        let ox = 0, oy = 0;
         if (i > 0 && i < points.length - 1) {
           const tan = tangent(points[i - 1]!, points[i + 1]!);
           const n = normalLeft(tan);
-          // Filament offset increases with dryness and adds per-filament jitter
-          const jitteredOffset = baseOffset * (0.8 + 0.4 * dryness)
-            + n.x * config.weight * 0.1 * (rng() - 0.5);
-          ox = n.x * jitteredOffset;
-          oy = n.y * jitteredOffset;
+          ox = n.x * normalizedF * spread;
+          oy = n.y * normalizedF * spread;
         }
 
-        filamentPoints.push({ x: pt.x + ox, y: pt.y + oy });
+        // Probabilistic gaps in the trailing 30% (bristles fully separating)
+        if (t > 0.7 && rng() < 0.12 * config.jitter) {
+          if (filamentPts.length >= 2) {
+            marks.push({
+              points: [...filamentPts],
+              width: config.weight * 0.12,
+              opacity: 0.35 + rng() * 0.25,
+            });
+          }
+          filamentPts.length = 0;
+          continue;
+        }
+
+        filamentPts.push({ x: pt.x + ox, y: pt.y + oy });
       }
 
-      if (filamentPoints.length >= 2) {
+      if (filamentPts.length >= 2) {
         marks.push({
-          points: filamentPoints,
-          width: config.weight * 0.25,
-          opacity: 0.4 + rng() * 0.35,
+          points: filamentPts,
+          width: config.weight * 0.12,
+          opacity: 0.35 + rng() * 0.25,
         });
       }
     }
 
-    // 3. Wet pooling — darker spots at endpoints and direction changes
+    // 4. Wet pooling — single darker dot at the start where ink pools
     if (config.density > 0.2 && totalLength > 5) {
-      // Start pooling (ink loaded here)
       marks.push({
         points: [{ x: points[0]!.x, y: points[0]!.y }],
-        width: startW * 0.8,
-        opacity: 0.5 + rng() * 0.3,
+        width: points[0]!.width * 1.6,
+        opacity: 0.5 + rng() * 0.2,
       });
-
-      // End pooling (if brush rests)
-      if (rng() < 0.5) {
-        const lastPt = points[points.length - 1]!;
-        marks.push({
-          points: [{ x: lastPt.x, y: lastPt.y }],
-          width: endW * 1.5,
-          opacity: 0.3 + rng() * 0.3,
-        });
-      }
-
-      // Direction-change pooling (ink gathers where brush slows)
-      for (let i = 2; i < points.length - 2; i++) {
-        const prev = tangent(points[i - 1]!, points[i]!);
-        const next = tangent(points[i]!, points[i + 1]!);
-        const dotProd = prev.x * next.x + prev.y * next.y;
-
-        // Sharp direction change = brush slows = ink pools
-        if (dotProd < 0.7 && rng() < 0.6) {
-          marks.push({
-            points: [{ x: points[i]!.x, y: points[i]!.y }],
-            width: points[i]!.width * 0.6,
-            opacity: 0.4 + rng() * 0.2,
-          });
-        }
-      }
     }
 
     return marks;

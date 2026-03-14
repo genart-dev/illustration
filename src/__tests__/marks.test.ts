@@ -406,9 +406,9 @@ describe("brushMark", () => {
   it("dry-brush filaments have thin width", () => {
     const outline = getOutline(sCurveProfile);
     const marks = brushMark.generateMarks(outline, sCurveProfile, defaultConfig, seededRng());
-    // Main stroke is a filled polygon (width=0), filaments should be
-    // thinner than the config weight
-    const filaments = marks.filter(m => m.points.length > 1 && m.width > 0);
+    // Main stroke is a filled polygon (width=0), wet reinforcement is wide,
+    // filaments should be thinner than the config weight (width * 0.12)
+    const filaments = marks.filter(m => m.points.length > 1 && m.width > 0 && m.width < defaultConfig.weight * 0.5);
     expect(filaments.length).toBeGreaterThan(0);
     for (const f of filaments) {
       expect(f.width).toBeLessThan(defaultConfig.weight);

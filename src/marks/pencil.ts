@@ -37,12 +37,13 @@ export const pencilMark: MarkStrategy = {
     const cumLengths = cumulativeArcLengths(points);
     const totalLength = cumLengths[cumLengths.length - 1]!;
 
-    // Multiple passes — each slightly offset perpendicular to the stroke,
-    // simulating re-stroking the same line to build up graphite value
+    // Multiple passes — each visibly offset perpendicular to the stroke,
+    // simulating re-stroking the same line to build up graphite value.
+    // Offsets are wide enough that individual strokes remain distinguishable.
     for (let pass = 0; pass < passes; pass++) {
-      const passOffset = (pass - (passes - 1) / 2) * config.weight * 0.2 * config.jitter;
-      const passWidth = config.weight * (0.5 + rng() * 0.6);
-      const passAlpha = 0.2 + rng() * 0.3; // graphite is translucent
+      const passOffset = (pass - (passes - 1) / 2) * config.weight * 0.5;
+      const passWidth = config.weight * (0.4 + rng() * 0.3);
+      const passAlpha = 0.25 + rng() * 0.2; // graphite is translucent
 
       const strokePoints: Point2D[] = [];
 
@@ -56,8 +57,8 @@ export const pencilMark: MarkStrategy = {
         if (i > 0 && i < points.length - 1) {
           const tan = tangent(points[i - 1]!, points[i + 1]!);
           const n = normalLeft(tan);
-          // Fixed pass offset + small random wobble per point (pencil shake)
-          const jitter = passOffset + (rng() - 0.5) * config.weight * config.jitter * 0.15;
+          // Fixed pass offset + random wobble per point (pencil shake)
+          const jitter = passOffset + (rng() - 0.5) * config.weight * config.jitter * 0.3;
           ox = n.x * jitter;
           oy = n.y * jitter;
         }
