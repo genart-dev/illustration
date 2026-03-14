@@ -52,7 +52,7 @@ export const brushMark: MarkStrategy = {
         marks.push({
           points: poly,
           width: 0, // filled polygon
-          opacity: 0.8 + rng() * 0.15,
+          opacity: 0.55 + rng() * 0.15,
         });
       }
     }

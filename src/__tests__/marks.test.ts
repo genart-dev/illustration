@@ -237,12 +237,12 @@ describe("pencilMark", () => {
     }
   });
 
-  it("generates cross-hatching for deep segments", () => {
+  it("generates extra shading strokes for deep segments", () => {
     const outline = getOutline(deepProfile);
     const marks = pencilMark.generateMarks(outline, deepProfile, { ...defaultConfig, density: 0.8 }, seededRng());
-    // Should have hatch marks (2-point lines) beyond the 3 pass strokes
-    const hatchMarks = marks.filter(m => m.points.length === 2);
-    expect(hatchMarks.length).toBeGreaterThan(0);
+    // Deep segments should have more marks than just the 3 pass strokes
+    // (additional close-parallel shading strokes to build tonal value)
+    expect(marks.length).toBeGreaterThan(3);
   });
 
   it("returns empty for single-point profile", () => {

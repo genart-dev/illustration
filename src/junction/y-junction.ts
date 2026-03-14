@@ -190,7 +190,12 @@ function computeCrotchCurve(
   const d = dist(childInnerBase, parentForkPt);
   if (d < 0.5) return [childInnerBase, parentForkPt];
 
-  const cpDist = d * 0.4;
+  // Scale control arm length by fork angle — at narrow angles the child
+  // direction is nearly parallel to the parent, so long arms overshoot.
+  const dotProduct = Math.abs(childDir.x * parentTan.x + childDir.y * parentTan.y);
+  // dotProduct ≈ 1 for narrow forks, ≈ 0 for perpendicular
+  const angleFactor = 0.15 + 0.3 * (1 - dotProduct);
+  const cpDist = d * angleFactor;
 
   // Child CP: extends opposite to child direction (back toward parent)
   const cp1 = add(childInnerBase, scale(childDir, -cpDist));

@@ -904,6 +904,378 @@ const bars: BarSpec[] = [
       after.stroke();
     },
   },
+
+  // ── Variation Bars (21-28) ──
+
+  // Mark variations — same stroke, different mark strategies side by side
+  {
+    id: 21,
+    name: "Ink Pressure Variations",
+    group: "phase-3-marks-variations",
+    render(before, after) {
+      const rng = mulberry32(200);
+
+      // Three ink strokes at different pressures/weights
+      clearCanvas(before);
+      addLabel(before, "Bar 21: Before — three raw strokes");
+      const profiles: StrokeProfile[] = [];
+      for (let row = 0; row < 3; row++) {
+        const y = 60 + row * 80;
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 32; i++) {
+          const t = i / 32;
+          pts.push({
+            x: PAD + 40 + t * (W - 2 * PAD - 80),
+            y: y + 20 * Math.sin(t * Math.PI * 3),
+            width: [3, 8, 14][row]!,
+            pressure: 0.3 + 0.7 * Math.sin(t * Math.PI),
+          });
+        }
+        profiles.push({ points: pts, cap: "round" });
+        renderBefore(before, profiles[row]!);
+      }
+
+      clearCanvas(after);
+      addLabel(after, "Bar 21: After — inkMark at 3 weights");
+      const weights = [2, 6, 12];
+      const labels = ["fine", "medium", "bold"];
+      for (let row = 0; row < 3; row++) {
+        const outline = generateStrokeOutline(profiles[row]!);
+        if (!outline) continue;
+        const config: MarkConfig = { density: 0.8, weight: weights[row]!, jitter: 0.5 };
+        const marks = inkMark.generateMarks(outline, profiles[row]!, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(labels[row]!, PAD + 4, 57 + row * 80);
+      }
+    },
+  },
+  {
+    id: 22,
+    name: "Engraving Density Gradient",
+    group: "phase-3-marks-variations",
+    render(before, after) {
+      const rng = mulberry32(300);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 22: Before — five raw strokes");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 22: After — engravingMark, 5 densities");
+
+      const densities = [0.2, 0.4, 0.6, 0.8, 1.0];
+      for (let row = 0; row < 5; row++) {
+        const y = 40 + row * 50;
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = i / 24;
+          pts.push({
+            x: PAD + 40 + t * (W - 2 * PAD - 80),
+            y: y + 10 * Math.sin(t * Math.PI * 2),
+            width: 6 + 4 * Math.sin(t * Math.PI),
+            depth: row,
+          });
+        }
+        const profile: StrokeProfile = { points: pts, cap: "round" };
+        renderBefore(before, profile);
+
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const config: MarkConfig = { density: densities[row]!, weight: 2, jitter: 0.1 };
+        const marks = engravingMark.generateMarks(outline, profile, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(`d=${densities[row]!.toFixed(1)}`, PAD + 4, y - 2);
+      }
+    },
+  },
+  {
+    id: 23,
+    name: "Woodcut Gouge Variations",
+    group: "phase-3-marks-variations",
+    render(before, after) {
+      const rng = mulberry32(400);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 23: Before — three raw strokes");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 23: After — woodcutMark, 3 jitter levels");
+
+      const jitters = [0.1, 0.4, 0.8];
+      const labels = ["tight", "medium", "loose"];
+      for (let row = 0; row < 3; row++) {
+        const y = 60 + row * 80;
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = i / 24;
+          pts.push({
+            x: PAD + 40 + t * (W - 2 * PAD - 80),
+            y: y + 15 * Math.sin(t * Math.PI * 1.5),
+            width: 10 + 4 * Math.sin(t * Math.PI),
+            depth: 0,
+          });
+        }
+        const profile: StrokeProfile = { points: pts, cap: "flat" };
+        renderBefore(before, profile);
+
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const config: MarkConfig = { density: 0.7, weight: 3, jitter: jitters[row]! };
+        const marks = woodcutMark.generateMarks(outline, profile, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(labels[row]!, PAD + 4, y - 5);
+      }
+    },
+  },
+  {
+    id: 24,
+    name: "Brush Weight Comparison",
+    group: "phase-3-marks-variations",
+    render(before, after) {
+      const rng = mulberry32(500);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 24: Before — three gestural strokes");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 24: After — brushMark, fine/medium/bold");
+
+      const weights = [4, 10, 20];
+      const labels = ["fine", "medium", "bold"];
+      for (let row = 0; row < 3; row++) {
+        const y = 60 + row * 80;
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 36; i++) {
+          const t = i / 36;
+          pts.push({
+            x: PAD + 20 + t * (W - 2 * PAD - 40),
+            y: y + 25 * Math.sin(t * Math.PI * 2.5),
+            width: weights[row]! * 0.5,
+            pressure: 0.3 + 0.7 * Math.sin(t * Math.PI),
+            depth: 1,
+          });
+        }
+        const profile: StrokeProfile = { points: pts, cap: "round" };
+        renderBefore(before, profile);
+
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const config: MarkConfig = { density: 0.8, weight: weights[row]!, jitter: 0.6 };
+        const marks = brushMark.generateMarks(outline, profile, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(labels[row]!, PAD + 4, y - 8);
+      }
+    },
+  },
+
+  // Fill variations
+  {
+    id: 25,
+    name: "Hatch Angle Comparison",
+    group: "phase-3-fills-variations",
+    render(before, after) {
+      const rng = mulberry32(600);
+      const stripW = (W - 2 * PAD) / 4;
+
+      clearCanvas(before);
+      addLabel(before, "Bar 25: Before — solid fills");
+      for (let i = 0; i < 4; i++) {
+        before.fillStyle = FG;
+        before.globalAlpha = 0.3;
+        before.fillRect(PAD + i * stripW + 4, PAD + 20, stripW - 8, H - 2 * PAD - 20);
+      }
+      before.globalAlpha = 1;
+
+      clearCanvas(after);
+      addLabel(after, "Bar 25: After — hatchFill at 0°/30°/45°/90°");
+      const angles = [0, Math.PI / 6, Math.PI / 4, Math.PI / 2];
+      const labels = ["0°", "30°", "45°", "90°"];
+      for (let i = 0; i < 4; i++) {
+        const sx = PAD + i * stripW + 4;
+        const sy = PAD + 20;
+        const sw = stripW - 8;
+        const sh = H - 2 * PAD - 20;
+        const stripRegion: Point2D[] = [
+          { x: sx, y: sy },
+          { x: sx + sw, y: sy },
+          { x: sx + sw, y: sy + sh },
+          { x: sx, y: sy + sh },
+        ];
+        const config: FillConfig = { density: 0.6, weight: 0.7, angle: angles[i]! };
+        const marks = hatchFill.generateFill(stripRegion, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.strokeStyle = "#aaa";
+        after.lineWidth = 0.5;
+        after.strokeRect(sx, sy, sw, sh);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(labels[i]!, sx + 4, sy - 4);
+      }
+    },
+  },
+  {
+    id: 26,
+    name: "Crosshatch with Gradient",
+    group: "phase-3-fills-variations",
+    render(before, after) {
+      const rng = mulberry32(700);
+      const region = leafPolygon(W / 2, H / 2, 200, 100);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 26: Before — solid gradient fill");
+      // Simulate gradient with strips
+      for (let x = PAD; x < W - PAD; x += 4) {
+        const t = (x - PAD) / (W - 2 * PAD);
+        before.fillStyle = FG;
+        before.globalAlpha = 0.1 + t * 0.5;
+        before.fillRect(x, PAD, 4, H - 2 * PAD);
+      }
+      before.globalAlpha = 1;
+
+      clearCanvas(after);
+      addLabel(after, "Bar 26: After — crosshatchFill with gradient");
+      const config: FillConfig = {
+        density: 0.7,
+        weight: 0.6,
+        angle: Math.PI / 6,
+        secondaryAngle: -Math.PI / 6,
+        gradient: { angle: 0, strength: 0.9 },
+      };
+      const marks = crosshatchFill.generateFill(region, config, rng);
+      renderMarks(after, marks, FG, BG);
+      after.strokeStyle = FG;
+      after.lineWidth = 1;
+      after.beginPath();
+      after.moveTo(region[0]!.x, region[0]!.y);
+      for (const p of region) after.lineTo(p.x, p.y);
+      after.closePath();
+      after.stroke();
+    },
+  },
+  {
+    id: 27,
+    name: "Stipple Density Gradient",
+    group: "phase-3-fills-variations",
+    render(before, after) {
+      const rng = mulberry32(800);
+      const region = leafPolygon(W / 2, H / 2, 200, 110);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 27: Before — solid gradient");
+      for (let x = PAD; x < W - PAD; x += 4) {
+        const t = (x - PAD) / (W - 2 * PAD);
+        before.fillStyle = FG;
+        before.globalAlpha = t * 0.5;
+        before.fillRect(x, PAD, 4, H - 2 * PAD);
+      }
+      before.globalAlpha = 1;
+
+      clearCanvas(after);
+      addLabel(after, "Bar 27: After — stippleFill, 3 densities");
+      // Three overlapping regions with different densities
+      const densities = [0.2, 0.5, 0.9];
+      const xOffsets = [-130, 0, 130];
+      for (let i = 0; i < 3; i++) {
+        const subRegion = leafPolygon(W / 2 + xOffsets[i]!, H / 2, 110, 90);
+        const config: FillConfig = {
+          density: densities[i]!,
+          weight: 1.2,
+          angle: 0,
+        };
+        const marks = stippleFill.generateFill(subRegion, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.strokeStyle = "#bbb";
+        after.lineWidth = 0.5;
+        after.beginPath();
+        after.moveTo(subRegion[0]!.x, subRegion[0]!.y);
+        for (const p of subRegion) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.stroke();
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(`${densities[i]!}`, W / 2 + xOffsets[i]! - 12, H / 2 + 100);
+      }
+    },
+  },
+  {
+    id: 28,
+    name: "All Six Mark Strategies",
+    group: "phase-3-marks-variations",
+    render(before, after) {
+      const rng = mulberry32(999);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 28: Before — same raw stroke ×6");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 28: After — technical/ink/pencil/engraving/woodcut/brush");
+
+      const strategies = [technicalMark, inkMark, pencilMark, engravingMark, woodcutMark, brushMark];
+      const stratLabels = ["tech", "ink", "pencil", "engrave", "woodcut", "brush"];
+      const cols = 3;
+      const rows = 2;
+      const cellW = (W - 2 * PAD) / cols;
+      const cellH = (H - PAD - 20) / rows;
+
+      for (let s = 0; s < strategies.length; s++) {
+        const col = s % cols;
+        const row = Math.floor(s / cols);
+        const cx = PAD + col * cellW + cellW / 2;
+        const cy = 30 + row * cellH + cellH / 2;
+
+        // Build a small S-curve in each cell
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 20; i++) {
+          const t = i / 20;
+          pts.push({
+            x: cx - cellW * 0.35 + t * cellW * 0.7,
+            y: cy + 15 * Math.sin(t * Math.PI * 2),
+            width: 3 + 5 * Math.sin(t * Math.PI),
+            depth: 2,
+            pressure: 0.3 + 0.7 * Math.sin(t * Math.PI),
+          });
+        }
+        const profile: StrokeProfile = {
+          points: pts,
+          cap: s === 4 ? "flat" : "round", // woodcut gets flat
+        };
+
+        // Before: raw stroke
+        before.strokeStyle = FG;
+        before.lineWidth = 6;
+        before.lineCap = "round";
+        before.beginPath();
+        before.moveTo(pts[0]!.x, pts[0]!.y);
+        for (const p of pts) before.lineTo(p.x, p.y);
+        before.stroke();
+        before.fillStyle = "#999";
+        before.font = "10px monospace";
+        before.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 25);
+
+        // After: mark strategy
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const config: MarkConfig = {
+          density: 0.7,
+          weight: s === 5 ? 10 : 4,
+          jitter: 0.5,
+          passes: s === 2 ? 3 : undefined,
+        };
+        const marks = strategies[s]!.generateMarks(outline, profile, config, rng);
+        renderMarks(after, marks, FG, BG);
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 25);
+      }
+    },
+  },
 ];
 
 // ── Main ──────────────────────────────────────────────────
