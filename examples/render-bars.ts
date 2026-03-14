@@ -455,8 +455,20 @@ const bars: BarSpec[] = [
     render(before, after) {
       const profile = vShapeProfile(30, 6);
       clearCanvas(before);
-      addLabel(before, "Bar 5: Before — lineJoin spike");
-      renderBefore(before, profile);
+      addLabel(before, "Bar 5: Before — miter spike at acute join");
+      // Use miter lineJoin to show the spike artifact
+      const { points } = profile;
+      before.strokeStyle = FG;
+      before.lineWidth = 12;
+      before.lineJoin = "miter";
+      before.miterLimit = 20; // high limit → visible spike
+      before.lineCap = "round";
+      before.beginPath();
+      before.moveTo(points[0]!.x, points[0]!.y);
+      for (let i = 1; i < points.length; i++) {
+        before.lineTo(points[i]!.x, points[i]!.y);
+      }
+      before.stroke();
       clearCanvas(after);
       addLabel(after, "Bar 5: After — miter-limited outline");
       const outline = generateStrokeOutline(profile);

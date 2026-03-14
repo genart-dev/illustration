@@ -73,11 +73,10 @@ export function mergeSegmentTree(
   // 1. Build adjacency tree
   const tree = buildSegmentTree(segments, tolerance);
 
-  // 2. Process each root node
+  // 2. Process each root node, collecting all branch outlines
   const results: MergedBranchOutline[] = [];
   for (const root of tree.roots) {
-    const result = processNode(root, tree, weightScale, maxDepth, cap, opts);
-    if (result) results.push(result);
+    collectBranchOutlines(root, tree, weightScale, maxDepth, cap, opts, results);
   }
 
   return results;
@@ -236,23 +235,27 @@ function chainToProfile(
 }
 
 /**
- * Process a node: build its profile, recursively process children,
- * and merge children into the parent via Y-junctions.
+ * Process a node and all its descendants, collecting all branch outlines.
+ *
+ * Each branch chain produces its own MergedBranchOutline (with any
+ * immediate children merged via Y-junction). Deeper branches are
+ * processed recursively and added to the results array.
  */
-function processNode(
+function collectBranchOutlines(
   head: SegmentNode,
   tree: SegmentTree,
   weightScale: number,
   maxDepth: number,
   cap: CapStyle,
-  opts?: TreeMergeOptions,
-): MergedBranchOutline | null {
+  opts: TreeMergeOptions | undefined,
+  results: MergedBranchOutline[],
+): void {
   const chain = collectChain(head);
   const children = collectChildren(head);
   const depth = chain[0]!.depth;
 
   // Skip if beyond max outline depth
-  if (depth > maxDepth) return null;
+  if (depth > maxDepth) return;
 
   const isLeaf = children.length === 0;
   const profile = chainToProfile(chain, weightScale, cap, isLeaf, opts);
@@ -260,19 +263,15 @@ function processNode(
   // Base case: leaf branch (no children to merge)
   if (isLeaf) {
     const polygon = generateStrokePolygon(profile);
-    if (!polygon) return null;
-    return {
-      outline: polygon,
-      crotches: [],
-      profile,
-      depth,
-    };
+    if (!polygon) return;
+    results.push({ outline: polygon, crotches: [], profile, depth });
+    return;
   }
 
-  // Recursive case: process children first, then merge into parent
+  // Non-leaf: merge immediate children via Y-junction, then recurse
   const crotches: Point2D[][] = [];
   let currentOutline = generateStrokePolygon(profile);
-  if (!currentOutline) return null;
+  if (!currentOutline) return;
 
   for (const childHead of children) {
     const childChain = collectChain(childHead);
@@ -299,22 +298,11 @@ function processNode(
       crotches.push(junction.crotch.slice());
     }
 
-    // Recursively process child's children (for deeper branches)
-    if (!childIsLeaf) {
-      const childResult = processNode(
-        childHead, tree, weightScale, maxDepth, cap, opts,
-      );
-      // Child result outlines are returned separately (not merged into parent)
-      // as the Y-junction already handles the geometric merge
-    }
+    // Recursively collect deeper branches
+    collectBranchOutlines(childHead, tree, weightScale, maxDepth, cap, opts, results);
   }
 
-  return {
-    outline: currentOutline,
-    crotches,
-    profile,
-    depth,
-  };
+  results.push({ outline: currentOutline, crotches, profile, depth });
 }
 
 /**
