@@ -165,6 +165,17 @@ export interface FillConfig {
   readonly jitter?: number;
   /** Secondary direction for crosshatch (radians). */
   readonly secondaryAngle?: number;
+  /**
+   * Spatial density gradient. When set, density varies linearly across the
+   * region: `density * (1 - gradient.strength)` at one edge to `density`
+   * at the opposite edge. The gradient direction is in radians (0 = left→right).
+   */
+  readonly gradient?: {
+    /** Direction of increasing density (radians). */
+    readonly angle: number;
+    /** Strength of the gradient (0–1). 0 = uniform, 1 = full range. */
+    readonly strength: number;
+  };
 }
 
 /**

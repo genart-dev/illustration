@@ -803,8 +803,13 @@ const bars: BarSpec[] = [
       before.globalAlpha = 1;
 
       clearCanvas(after);
-      addLabel(after, "Bar 18: After — hatchFill at 45°");
-      const config: FillConfig = { density: 0.6, weight: 0.8, angle: Math.PI / 4 };
+      addLabel(after, "Bar 18: After — hatchFill at 45° with gradient");
+      const config: FillConfig = {
+        density: 0.8,
+        weight: 0.8,
+        angle: Math.PI / 4,
+        gradient: { angle: Math.PI, strength: 0.95 },
+      };
       const marks = hatchFill.generateFill(region, config, rng);
       renderMarks(after, marks, FG, BG);
       // Draw region outline

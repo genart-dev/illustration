@@ -21,7 +21,7 @@ export const hatchFill: FillStrategy = {
     if (region.length < 3) return [];
 
     const bounds = polygonBounds(region);
-    const spacing = Math.max(1, (1 - config.density) * 20 + 2);
+    const baseSpacing = Math.max(1, (1 - config.density) * 20 + 2);
     const angle = config.angle;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -39,20 +39,31 @@ export const hatchFill: FillStrategy = {
       if (proj > maxProj) maxProj = proj;
     }
 
-    // Project extent along hatch direction for line length
-    let minDir = Infinity;
-    let maxDir = -Infinity;
-    for (const p of region) {
-      const proj = p.x * cos + p.y * sin;
-      if (proj < minDir) minDir = proj;
-      if (proj > maxDir) maxDir = proj;
+    // Gradient support: project region center and extents onto gradient axis
+    let gradDirX = 0;
+    let gradDirY = 0;
+    let gradMin = 0;
+    let gradRange = 0;
+    const hasGradient = config.gradient && config.gradient.strength > 0;
+    if (hasGradient) {
+      gradDirX = Math.cos(config.gradient!.angle);
+      gradDirY = Math.sin(config.gradient!.angle);
+      let gMin = Infinity;
+      let gMax = -Infinity;
+      for (const p of region) {
+        const proj = p.x * gradDirX + p.y * gradDirY;
+        if (proj < gMin) gMin = proj;
+        if (proj > gMax) gMax = proj;
+      }
+      gradMin = gMin;
+      gradRange = gMax - gMin;
     }
-    const extend = (maxDir - minDir) * 0.1;
 
     const marks: Mark[] = [];
 
-    // Scan across perpendicular axis
-    for (let d = minProj; d <= maxProj; d += spacing) {
+    // Scan across perpendicular axis with variable step size
+    let d = minProj;
+    while (d <= maxProj) {
       // Origin of this scan line: a point at perpendicular offset d
       const ox = perpX * d;
       const oy = perpY * d;
@@ -61,6 +72,21 @@ export const hatchFill: FillStrategy = {
       const intersections = linePolygonIntersections(
         ox, oy, cos, sin, region,
       );
+
+      // Compute local density factor from gradient
+      let localDensityFactor = 1;
+      if (hasGradient && gradRange > 0 && intersections.length >= 2) {
+        // Project the scan line origin onto the gradient axis
+        const gradProj = ox * gradDirX + oy * gradDirY;
+        // Also include the midpoint contribution for non-perpendicular gradients
+        const tMid = (intersections[0]! + intersections[1]!) / 2;
+        const midX = ox + cos * tMid;
+        const midY = oy + sin * tMid;
+        const midProj = midX * gradDirX + midY * gradDirY;
+        const gradT = Math.max(0, Math.min(1, (midProj - gradMin) / gradRange));
+        // gradT=0 → sparse (wide spacing), gradT=1 → dense (tight spacing)
+        localDensityFactor = (1 - config.gradient!.strength) + config.gradient!.strength * gradT;
+      }
 
       // Draw segments between pairs
       for (let j = 0; j + 1 < intersections.length; j += 2) {
@@ -76,6 +102,10 @@ export const hatchFill: FillStrategy = {
           opacity: 1,
         });
       }
+
+      // Advance by spacing — narrower spacing = denser lines in gradient direction
+      const spacing = baseSpacing / Math.max(0.2, localDensityFactor);
+      d += spacing;
     }
 
     return marks;

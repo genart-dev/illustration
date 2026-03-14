@@ -35,63 +35,79 @@ export const brushMark: MarkStrategy = {
     const cumLengths = cumulativeArcLengths(points);
     const totalLength = cumLengths[cumLengths.length - 1]!;
 
-    // 1. Main brush stroke — wide, with thick→thin taper
-    // Width envelope: swell at start (loading), taper to thin at end (lift)
-    const mainPoints: Point2D[] = [];
+    // 1. Main brush stroke — rendered as the filled outline polygon plus
+    // edge wobble marks for bristle texture. The outline provides the
+    // thick→thin taper via the profile's per-point width.
+    const startW = config.weight * 1.4;
+    const endW = config.weight * 0.25;
 
-    for (let i = 0; i < points.length; i++) {
-      const pt = points[i]!;
-      const t = totalLength > 0 ? cumLengths[i]! / totalLength : 0;
-
-      // Edge wobble for brush bristle texture
-      let wx = 0;
-      let wy = 0;
-      if (i > 0 && i < points.length - 1) {
-        const tan = tangent(points[i - 1]!, points[i + 1]!);
-        const n = normalLeft(tan);
-        const wobble = pt.width * 0.08 * (rng() - 0.5);
-        wx = n.x * wobble;
-        wy = n.y * wobble;
+    // Build the main filled stroke from the outline (already passed in)
+    {
+      const poly: Point2D[] = [];
+      for (const p of outline.startCap) poly.push(p);
+      for (const p of outline.left) poly.push(p);
+      for (const p of outline.endCap) poly.push(p);
+      for (let i = outline.right.length - 1; i >= 0; i--) poly.push(outline.right[i]!);
+      if (poly.length >= 3) {
+        marks.push({
+          points: poly,
+          width: 0, // filled polygon
+          opacity: 0.8 + rng() * 0.15,
+        });
       }
-
-      mainPoints.push({ x: pt.x + wx, y: pt.y + wy });
     }
 
-    // Width varies dramatically: thick at start, thin at end
-    const startW = config.weight * 1.2;
-    const endW = config.weight * 0.3;
-    const avgW = (startW + endW) / 2;
-
-    marks.push({
-      points: mainPoints,
-      width: avgW,
-      opacity: 0.75 + rng() * 0.2,
-    });
+    // Edge wobble marks — short strokes along both edges for bristle texture
+    const wobbleCount = Math.max(3, Math.floor(points.length / 8));
+    for (let w = 0; w < wobbleCount; w++) {
+      const edgePts = rng() > 0.5 ? outline.left : outline.right;
+      if (edgePts.length < 4) continue;
+      const startIdx = Math.floor(rng() * (edgePts.length - 3));
+      const len = 2 + Math.floor(rng() * 3);
+      const endIdx = Math.min(startIdx + len, edgePts.length - 1);
+      const wobblePts: Point2D[] = [];
+      for (let i = startIdx; i <= endIdx; i++) {
+        const p = edgePts[i]!;
+        wobblePts.push({
+          x: p.x + (rng() - 0.5) * 2,
+          y: p.y + (rng() - 0.5) * 2,
+        });
+      }
+      if (wobblePts.length >= 2) {
+        marks.push({
+          points: wobblePts,
+          width: config.weight * 0.15,
+          opacity: 0.3 + rng() * 0.3,
+        });
+      }
+    }
 
     // 2. Dry-brush filaments — at fast/thin sections, the stroke breaks
-    // into parallel lines (bristle marks visible)
-    const filamentCount = Math.floor(config.density * 3) + 1;
+    // into parallel lines (bristle marks visible).
+    // 5-8 filaments spread across the stroke width for visible breakup.
+    const filamentCount = Math.floor(config.density * 5) + 3;
 
     for (let f = 0; f < filamentCount; f++) {
       const filamentPoints: Point2D[] = [];
-      const filamentOffset = (f - (filamentCount - 1) / 2) * config.weight * 0.3;
-      let hasGap = false;
+      // Spread filaments across the full stroke width
+      const normalizedF = (f - (filamentCount - 1) / 2) / ((filamentCount - 1) / 2 || 1);
+      const baseOffset = normalizedF * config.weight * 0.6;
 
       for (let i = 0; i < points.length; i++) {
         const pt = points[i]!;
         const t = totalLength > 0 ? cumLengths[i]! / totalLength : 0;
 
-        // Dry-brush effect: filaments only appear in the second half
-        // where the brush is running dry
-        if (t < 0.4) continue;
+        // Dry-brush effect: filaments begin around t=0.3, fully separated by t=0.6
+        if (t < 0.3) continue;
+        const dryness = Math.min(1, (t - 0.3) / 0.3);
 
-        // Probabilistic gaps — brush bristles separate
-        if (rng() < 0.15 * config.jitter) {
+        // Probabilistic gaps — brush bristles separate more as stroke dries
+        if (rng() < 0.2 * config.jitter * dryness) {
           if (filamentPoints.length >= 2) {
             marks.push({
               points: [...filamentPoints],
-              width: config.weight * 0.15,
-              opacity: 0.3 + rng() * 0.3,
+              width: config.weight * 0.25,
+              opacity: 0.4 + rng() * 0.35,
             });
           }
           filamentPoints.length = 0;
@@ -103,8 +119,11 @@ export const brushMark: MarkStrategy = {
         if (i > 0 && i < points.length - 1) {
           const tan = tangent(points[i - 1]!, points[i + 1]!);
           const n = normalLeft(tan);
-          ox = n.x * filamentOffset;
-          oy = n.y * filamentOffset;
+          // Filament offset increases with dryness and adds per-filament jitter
+          const jitteredOffset = baseOffset * (0.8 + 0.4 * dryness)
+            + n.x * config.weight * 0.1 * (rng() - 0.5);
+          ox = n.x * jitteredOffset;
+          oy = n.y * jitteredOffset;
         }
 
         filamentPoints.push({ x: pt.x + ox, y: pt.y + oy });
@@ -113,8 +132,8 @@ export const brushMark: MarkStrategy = {
       if (filamentPoints.length >= 2) {
         marks.push({
           points: filamentPoints,
-          width: config.weight * 0.15,
-          opacity: 0.3 + rng() * 0.3,
+          width: config.weight * 0.25,
+          opacity: 0.4 + rng() * 0.35,
         });
       }
     }
@@ -122,18 +141,17 @@ export const brushMark: MarkStrategy = {
     // 3. Wet pooling — darker spots at endpoints and direction changes
     if (config.density > 0.2 && totalLength > 5) {
       // Start pooling (ink loaded here)
-      const startPt = mainPoints[0]!;
       marks.push({
-        points: [startPt],
+        points: [{ x: points[0]!.x, y: points[0]!.y }],
         width: startW * 0.8,
         opacity: 0.5 + rng() * 0.3,
       });
 
       // End pooling (if brush rests)
       if (rng() < 0.5) {
-        const endPt = mainPoints[mainPoints.length - 1]!;
+        const lastPt = points[points.length - 1]!;
         marks.push({
-          points: [endPt],
+          points: [{ x: lastPt.x, y: lastPt.y }],
           width: endW * 1.5,
           opacity: 0.3 + rng() * 0.3,
         });

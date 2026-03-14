@@ -216,7 +216,11 @@ function chainToProfile(
   });
 
   // End point of each segment
+  let totalLen = 0;
   for (const seg of chain) {
+    const dx = seg.x2 - seg.x1;
+    const dy = seg.y2 - seg.y1;
+    totalLen += Math.sqrt(dx * dx + dy * dy);
     points.push({
       x: seg.x2,
       y: seg.y2,
@@ -225,10 +229,23 @@ function chainToProfile(
     });
   }
 
+  // Limit tip taper to at most 50% of the branch length and ensure
+  // the remaining tip width is enough for a visible rounded end.
+  let tipTaper = opts?.tipTaper ?? 0;
+  if (isLeaf && tipTaper > 0) {
+    tipTaper = Math.min(tipTaper, totalLen * 0.5);
+    // For very thin branches (width < 3px), skip taper entirely and
+    // let the round cap provide a natural taper
+    const tipWidth = points[points.length - 1]!.width;
+    if (tipWidth < 3) {
+      tipTaper = 0;
+    }
+  }
+
   return {
     points,
-    taper: isLeaf && (opts?.tipTaper ?? 0) > 0
-      ? { end: opts!.tipTaper!, curve: "ease-out" }
+    taper: isLeaf && tipTaper > 0
+      ? { end: tipTaper, curve: "ease-out" }
       : undefined,
     cap,
   };
