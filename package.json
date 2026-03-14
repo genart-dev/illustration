@@ -52,6 +52,7 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.96",
     "tsup": "^8.3.6",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
