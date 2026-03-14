@@ -15,6 +15,9 @@ export type {
   MarkStrategy,
   FillConfig,
   FillStrategy,
+  DepthRange,
+  AtmosphericDepthConfig,
+  ResolvedDepth,
 } from "./types.js";
 
 // ── Stroke outline generation ───────────────────────────
@@ -56,6 +59,17 @@ export { pencilMark } from "./marks/pencil.js";
 export { engravingMark } from "./marks/engraving.js";
 export { woodcutMark } from "./marks/woodcut.js";
 export { brushMark } from "./marks/brush.js";
+
+// ── Atmospheric depth ──────────────────────────────────
+export {
+  resolveDepth,
+  applyDepthToMarkConfig,
+  applyDepthToFillConfig,
+  applyDepthToMarks,
+  DEPTH_STANDARD,
+  DEPTH_DRAMATIC,
+  DEPTH_SUBTLE,
+} from "./depth/resolve.js";
 
 // ── Fill strategies ─────────────────────────────────────
 export { hatchFill } from "./fill/hatch.js";

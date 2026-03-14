@@ -194,3 +194,56 @@ export interface FillStrategy {
     rng: () => number,
   ): Mark[];
 }
+
+// ── Atmospheric Depth ──────────────────────────────────
+
+/** A range mapping for a single visual property across depth. */
+export interface DepthRange {
+  /** Value at the foreground (depth = near). */
+  readonly near: number;
+  /** Value at the background (depth = far). */
+  readonly far: number;
+}
+
+/**
+ * Configures how visual properties change with distance/depth.
+ *
+ * Given a normalized depth (0 = foreground, 1 = background), resolveDepth()
+ * interpolates each property between its near and far values. This produces
+ * coordinated changes across weight, opacity, density, and detail — the
+ * hallmark of atmospheric perspective in illustration.
+ *
+ * Usage:
+ * ```ts
+ * const config: AtmosphericDepthConfig = {
+ *   weight:  { near: 8, far: 1.5 },
+ *   opacity: { near: 1, far: 0.25 },
+ *   density: { near: 0.9, far: 0.2 },
+ *   detail:  { near: 1, far: 0.3 },
+ *   easing: "ease-out",
+ * };
+ * const props = resolveDepth(0.5, config); // midground
+ * // → { weight: ~4, opacity: ~0.5, density: ~0.5, detail: ~0.6 }
+ * ```
+ */
+export interface AtmosphericDepthConfig {
+  /** Line weight / stroke width range. */
+  readonly weight: DepthRange;
+  /** Opacity / contrast range. */
+  readonly opacity: DepthRange;
+  /** Mark density range (hatching spacing, stipple count, etc.). */
+  readonly density: DepthRange;
+  /** Detail level range (1 = full detail, 0 = silhouette). Controls
+   *  branch depth limits, mark complexity, fill resolution. */
+  readonly detail: DepthRange;
+  /** Easing curve for interpolation. Default: "linear". */
+  readonly easing?: TaperCurve;
+}
+
+/** Resolved visual properties at a specific depth. */
+export interface ResolvedDepth {
+  readonly weight: number;
+  readonly opacity: number;
+  readonly density: number;
+  readonly detail: number;
+}

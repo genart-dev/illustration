@@ -26,6 +26,11 @@ import {
   hatchFill,
   crosshatchFill,
   stippleFill,
+  resolveDepth,
+  applyDepthToMarks,
+  DEPTH_STANDARD,
+  DEPTH_DRAMATIC,
+  DEPTH_SUBTLE,
   type StrokeProfile,
   type StrokePoint,
   type StrokeOutline,
@@ -34,6 +39,7 @@ import {
   type Point2D,
   type FillConfig,
   type TurtleSegment,
+  type AtmosphericDepthConfig,
 } from "../src/index.js";
 
 // ── Configuration ─────────────────────────────────────────
@@ -606,16 +612,31 @@ const bars: BarSpec[] = [
       renderSegmentsBefore(before, segments);
 
       clearCanvas(after);
-      addLabel(after, "Bar 10: After — mergeSegmentTree");
+      addLabel(after, "Bar 10: After — merged outlines + engravingMark");
+      const rng = mulberry32(42);
       const merged = mergeSegmentTree(segments, { tipTaper: 10 });
-      after.fillStyle = FG;
       for (const branch of merged) {
         if (branch.outline.length < 3) continue;
-        after.beginPath();
-        after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
-        for (const p of branch.outline) after.lineTo(p.x, p.y);
-        after.closePath();
-        after.fill();
+        // Render each branch with engraving marks to show the value
+        // of having closed outline polygons (vs raw lineTo strokes)
+        const outline = generateStrokeOutline(branch.profile);
+        if (outline) {
+          const markCfg: MarkConfig = {
+            density: 0.6,
+            weight: Math.max(1, 3 - branch.depth),
+            jitter: 0.1,
+          };
+          const marks = engravingMark.generateMarks(outline, branch.profile, markCfg, rng);
+          renderMarks(after, marks, FG, BG);
+        } else {
+          // Fallback: solid fill for branches without a valid outline
+          after.fillStyle = FG;
+          after.beginPath();
+          after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
+          for (const p of branch.outline) after.lineTo(p.x, p.y);
+          after.closePath();
+          after.fill();
+        }
       }
     },
   },
@@ -1379,7 +1400,7 @@ const bars: BarSpec[] = [
       const distances = [
         { label: "fg", density: 0.9, weight: 1.2, opacity: 1.0, x: W * 0.2 },
         { label: "mid", density: 0.5, weight: 0.8, opacity: 0.6, x: W * 0.5 },
-        { label: "bg", density: 0.2, weight: 0.4, opacity: 0.25, x: W * 0.8 },
+        { label: "bg", density: 0.25, weight: 0.5, opacity: 0.35, x: W * 0.8 },
       ];
 
       for (const d of distances) {
@@ -1439,7 +1460,7 @@ const bars: BarSpec[] = [
       const distances = [
         { label: "fg", scale: 1.0, weightScale: 1.0, opacity: 1.0, x: W * 0.18 },
         { label: "mid", scale: 0.65, weightScale: 0.5, opacity: 0.55, x: W * 0.5 },
-        { label: "bg", scale: 0.35, weightScale: 0.2, opacity: 0.2, x: W * 0.82 },
+        { label: "bg", scale: 0.35, weightScale: 0.25, opacity: 0.35, x: W * 0.82 },
       ];
 
       for (const d of distances) {
@@ -1479,6 +1500,202 @@ const bars: BarSpec[] = [
         after.fillStyle = "#999";
         after.font = "10px monospace";
         after.fillText(d.label, d.x - 8, PAD + 10);
+      }
+    },
+  },
+
+  // ── Overlap / Occlusion Bars (32-34) ──
+
+  {
+    id: 32,
+    name: "Overlapping Ovals at Depth",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1400);
+      const depthConfig = DEPTH_STANDARD;
+
+      // Three overlapping ovals at different depths
+      const ovals = [
+        { cx: W * 0.55, cy: H * 0.55, rx: 120, ry: 80, depth: 0.8, label: "bg" },
+        { cx: W * 0.45, cy: H * 0.5, rx: 110, ry: 75, depth: 0.4, label: "mid" },
+        { cx: W * 0.38, cy: H * 0.45, rx: 100, ry: 70, depth: 0, label: "fg" },
+      ];
+
+      clearCanvas(before);
+      addLabel(before, "Bar 32: Before — uniform weight, no depth");
+      for (const o of ovals) {
+        const region = leafPolygon(o.cx, o.cy, o.rx, o.ry);
+        before.strokeStyle = FG;
+        before.lineWidth = 2;
+        before.beginPath();
+        before.moveTo(region[0]!.x, region[0]!.y);
+        for (const p of region) before.lineTo(p.x, p.y);
+        before.closePath();
+        before.stroke();
+      }
+
+      clearCanvas(after);
+      addLabel(after, "Bar 32: After — resolveDepth, overlapping ovals");
+      // Render back-to-front
+      for (const o of ovals) {
+        const region = leafPolygon(o.cx, o.cy, o.rx, o.ry);
+        const resolved = resolveDepth(o.depth, depthConfig);
+        const config: FillConfig = {
+          density: 0.6 * resolved.density,
+          weight: 0.6 * resolved.weight,
+          angle: Math.PI / 4,
+        };
+        const marks = hatchFill.generateFill(region, config, rng);
+        const faded = applyDepthToMarks(marks, resolved.opacity);
+        renderMarks(after, faded as Mark[], FG, BG);
+        // Outline at depth-appropriate weight
+        after.strokeStyle = FG;
+        after.globalAlpha = resolved.opacity;
+        after.lineWidth = 1.5 * resolved.weight;
+        after.beginPath();
+        after.moveTo(region[0]!.x, region[0]!.y);
+        for (const p of region) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.stroke();
+        after.globalAlpha = 1;
+      }
+      // Labels
+      for (const o of ovals) {
+        const resolved = resolveDepth(o.depth, depthConfig);
+        after.fillStyle = "#999";
+        after.globalAlpha = Math.max(0.5, resolved.opacity);
+        after.font = "10px monospace";
+        after.fillText(o.label, o.cx + o.rx - 20, o.cy - o.ry + 14);
+        after.globalAlpha = 1;
+      }
+    },
+  },
+  {
+    id: 33,
+    name: "Overlapping Branches at Depth",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1500);
+      const depthConfig = DEPTH_DRAMATIC;
+
+      // Three branch strokes crossing at different depths
+      const branches = [
+        { depth: 0.85, y: H * 0.35, angle: -0.15, label: "bg" },
+        { depth: 0.35, y: H * 0.5, angle: 0.08, label: "mid" },
+        { depth: 0, y: H * 0.6, angle: -0.05, label: "fg" },
+      ];
+
+      clearCanvas(before);
+      addLabel(before, "Bar 33: Before — uniform ink strokes");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 33: After — depth-modulated ink");
+
+      for (const b of branches) {
+        const resolved = resolveDepth(b.depth, depthConfig);
+        const pts: StrokePoint[] = [];
+        for (let i = 0; i <= 32; i++) {
+          const t = i / 32;
+          pts.push({
+            x: PAD + 30 + t * (W - 2 * PAD - 60),
+            y: b.y + 30 * Math.sin(t * Math.PI * 2 + b.angle * 10),
+            width: 5 * resolved.weight,
+            pressure: 0.4 + 0.6 * Math.sin(t * Math.PI),
+          });
+        }
+        const profile: StrokeProfile = { points: pts, cap: "round" };
+
+        // Before: uniform
+        before.strokeStyle = FG;
+        before.lineWidth = 10;
+        before.lineCap = "round";
+        before.beginPath();
+        before.moveTo(pts[0]!.x, pts[0]!.y);
+        for (const p of pts) before.lineTo(p.x, p.y);
+        before.stroke();
+
+        // After: depth-modulated
+        const outline = generateStrokeOutline(profile);
+        if (!outline) continue;
+        const markCfg: MarkConfig = {
+          density: 0.8 * resolved.density,
+          weight: 6 * resolved.weight,
+          jitter: 0.4,
+        };
+        const marks = inkMark.generateMarks(outline, profile, markCfg, rng);
+        const faded = applyDepthToMarks(marks, resolved.opacity);
+        renderMarks(after, faded as Mark[], FG, BG);
+        after.fillStyle = "#999";
+        after.globalAlpha = Math.max(0.4, resolved.opacity);
+        after.font = "10px monospace";
+        after.fillText(b.label, PAD + 8, b.y - 20);
+        after.globalAlpha = 1;
+      }
+    },
+  },
+  {
+    id: 34,
+    name: "Scene Depth: Three Depth Presets",
+    group: "phase-4-depth",
+    render(before, after) {
+      const rng = mulberry32(1600);
+
+      clearCanvas(before);
+      addLabel(before, "Bar 34: Before — uniform scene");
+
+      clearCanvas(after);
+      addLabel(after, "Bar 34: After — subtle / standard / dramatic presets");
+
+      const presets: { config: AtmosphericDepthConfig; label: string; x: number }[] = [
+        { config: DEPTH_SUBTLE, label: "subtle", x: W * 0.17 },
+        { config: DEPTH_STANDARD, label: "standard", x: W * 0.5 },
+        { config: DEPTH_DRAMATIC, label: "dramatic", x: W * 0.83 },
+      ];
+
+      for (const preset of presets) {
+        const depths = [0, 0.4, 0.8];
+        // Draw 3 ovals at each preset position
+        for (let i = depths.length - 1; i >= 0; i--) {
+          const d = depths[i]!;
+          const resolved = resolveDepth(d, preset.config);
+          const ovalY = H * 0.35 + i * 35;
+          const region = leafPolygon(preset.x, ovalY, 55 - i * 8, 40 - i * 5);
+
+          // Before: uniform
+          before.strokeStyle = FG;
+          before.lineWidth = 1.5;
+          before.beginPath();
+          before.moveTo(region[0]!.x, region[0]!.y);
+          for (const p of region) before.lineTo(p.x, p.y);
+          before.closePath();
+          before.stroke();
+
+          // After: depth-modulated
+          const fillCfg: FillConfig = {
+            density: 0.7 * resolved.density,
+            weight: 0.7 * resolved.weight,
+            angle: Math.PI / 4,
+          };
+          const marks = hatchFill.generateFill(region, fillCfg, rng);
+          const faded = applyDepthToMarks(marks, resolved.opacity);
+          renderMarks(after, faded as Mark[], FG, BG);
+          after.strokeStyle = FG;
+          after.globalAlpha = resolved.opacity;
+          after.lineWidth = 1.5 * resolved.weight;
+          after.beginPath();
+          after.moveTo(region[0]!.x, region[0]!.y);
+          for (const p of region) after.lineTo(p.x, p.y);
+          after.closePath();
+          after.stroke();
+          after.globalAlpha = 1;
+        }
+
+        after.fillStyle = "#999";
+        after.font = "10px monospace";
+        after.fillText(preset.label, preset.x - 20, H - 15);
+        before.fillStyle = "#999";
+        before.font = "10px monospace";
+        before.fillText(preset.label, preset.x - 20, H - 15);
       }
     },
   },
