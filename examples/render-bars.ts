@@ -15,6 +15,8 @@ import { join } from "node:path";
 import {
   generateStrokeOutline,
   generateStrokePolygon,
+  mergeYJunction,
+  mergeSegmentTree,
   technicalMark,
   inkMark,
   pencilMark,
@@ -31,6 +33,7 @@ import {
   type MarkConfig,
   type Point2D,
   type FillConfig,
+  type TurtleSegment,
 } from "../src/index.js";
 
 // ── Configuration ─────────────────────────────────────────
@@ -147,6 +150,101 @@ function marksCurveProfile(depth = 0, nPoints = 48): StrokeProfile {
     points.push({ x, y, width, depth, pressure });
   }
   return { points, cap: "round" };
+}
+
+/** Create a Y-fork: parent going right, child forking at given angle (Bars 7-9). */
+function yForkProfiles(
+  forkAngleDeg: number,
+  parentHalfW: number,
+  childHalfW: number,
+): { parent: StrokeProfile; child: StrokeProfile; t: number; angle: number } {
+  const forkAngle = (forkAngleDeg * Math.PI) / 180;
+  const parentLen = 300;
+  const childLen = 150;
+  const forkT = 0.6;
+
+  // Parent: horizontal line
+  const px0 = PAD + 50;
+  const py0 = H / 2;
+  const px1 = px0 + parentLen;
+  const py1 = py0;
+
+  const parent: StrokeProfile = {
+    points: Array.from({ length: 16 }, (_, i) => ({
+      x: px0 + (i / 15) * parentLen,
+      y: py0,
+      width: parentHalfW,
+    })),
+    cap: "round",
+  };
+
+  // Child: starts at forkT along parent, goes at forkAngle
+  const cx0 = px0 + forkT * parentLen;
+  const cy0 = py0;
+  const child: StrokeProfile = {
+    points: Array.from({ length: 12 }, (_, i) => ({
+      x: cx0 + (i / 11) * childLen * Math.cos(forkAngle),
+      y: cy0 - (i / 11) * childLen * Math.sin(forkAngle),
+      width: childHalfW * (1 - i / 11 * 0.3),
+    })),
+    cap: "round",
+  };
+
+  return { parent, child, t: forkT, angle: forkAngle };
+}
+
+/** Render segments "before" — raw overlapping strokes. */
+function renderSegmentsBefore(
+  ctx: CanvasRenderingContext2D,
+  segments: readonly TurtleSegment[],
+  color = "#1a1a1a",
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const seg of segments) {
+    ctx.lineWidth = seg.width;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1, seg.y1);
+    ctx.lineTo(seg.x2, seg.y2);
+    ctx.stroke();
+  }
+}
+
+/** Generate a simple L-system tree as TurtleSegments (Bars 10-11). */
+function generateTreeSegments(
+  x: number, y: number,
+  angle: number,
+  length: number,
+  width: number,
+  depth: number,
+  maxDepth: number,
+  forkAngle: number,
+): TurtleSegment[] {
+  if (depth > maxDepth || width < 0.5) return [];
+
+  const x2 = x + length * Math.cos(angle);
+  const y2 = y + length * Math.sin(angle);
+  const seg: TurtleSegment = {
+    x1: x, y1: y, x2, y2, width, depth, order: 0,
+  };
+
+  const segments: TurtleSegment[] = [seg];
+
+  if (depth < maxDepth) {
+    // Left branch
+    segments.push(...generateTreeSegments(
+      x2, y2, angle - forkAngle,
+      length * 0.7, width * 0.65, depth + 1, maxDepth, forkAngle,
+    ));
+    // Right branch
+    segments.push(...generateTreeSegments(
+      x2, y2, angle + forkAngle,
+      length * 0.7, width * 0.65, depth + 1, maxDepth, forkAngle,
+    ));
+  }
+
+  return segments;
 }
 
 /** Leaf-like oval for fill tests (Bars 18-20). */
@@ -406,6 +504,141 @@ const bars: BarSpec[] = [
         };
         const outline = generateStrokeOutline(profile);
         if (outline) renderOutline(after, outline);
+      }
+    },
+  },
+
+  // ── Phase 2: Junctions (Bars 7-11) ──
+  {
+    id: 7,
+    name: "Y-Junction (60° Fork)",
+    group: "phase-2-junctions",
+    render(before, after) {
+      const { parent, child, t, angle } = yForkProfiles(60, 12, 8);
+      clearCanvas(before);
+      addLabel(before, "Bar 7: Before — overlapping strokes");
+      renderBefore(before, parent);
+      renderBefore(before, child);
+      clearCanvas(after);
+      addLabel(after, "Bar 7: After — mergeYJunction");
+      const junction = mergeYJunction({ parent, child, t, angle });
+      if (junction) {
+        after.fillStyle = FG;
+        after.beginPath();
+        after.moveTo(junction.outline[0]!.x, junction.outline[0]!.y);
+        for (const p of junction.outline) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
+      }
+    },
+  },
+  {
+    id: 8,
+    name: "Narrow-Angle Fork (20°)",
+    group: "phase-2-junctions",
+    render(before, after) {
+      const { parent, child, t, angle } = yForkProfiles(20, 12, 8);
+      clearCanvas(before);
+      addLabel(before, "Bar 8: Before — overlapping strokes");
+      renderBefore(before, parent);
+      renderBefore(before, child);
+      clearCanvas(after);
+      addLabel(after, "Bar 8: After — mergeYJunction (20°)");
+      const junction = mergeYJunction({ parent, child, t, angle });
+      if (junction) {
+        after.fillStyle = FG;
+        after.beginPath();
+        after.moveTo(junction.outline[0]!.x, junction.outline[0]!.y);
+        for (const p of junction.outline) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
+      }
+    },
+  },
+  {
+    id: 9,
+    name: "Wide-Angle Fork (150°)",
+    group: "phase-2-junctions",
+    render(before, after) {
+      const { parent, child, t, angle } = yForkProfiles(150, 12, 8);
+      clearCanvas(before);
+      addLabel(before, "Bar 9: Before — overlapping strokes");
+      renderBefore(before, parent);
+      renderBefore(before, child);
+      clearCanvas(after);
+      addLabel(after, "Bar 9: After — mergeYJunction (150°)");
+      const junction = mergeYJunction({ parent, child, t, angle });
+      if (junction) {
+        after.fillStyle = FG;
+        after.beginPath();
+        after.moveTo(junction.outline[0]!.x, junction.outline[0]!.y);
+        for (const p of junction.outline) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
+      }
+    },
+  },
+  {
+    id: 10,
+    name: "Multi-Level Tree (Depth 0–4)",
+    group: "phase-2-junctions",
+    render(before, after) {
+      const segments = generateTreeSegments(
+        W / 2, H - PAD,   // start at bottom center
+        -Math.PI / 2,      // grow upward
+        80, 16, 0, 4,      // length, width, depth, maxDepth
+        Math.PI / 5,        // fork angle (36°)
+      );
+      clearCanvas(before);
+      addLabel(before, "Bar 10: Before — raw overlapping segments");
+      renderSegmentsBefore(before, segments);
+
+      clearCanvas(after);
+      addLabel(after, "Bar 10: After — mergeSegmentTree");
+      const merged = mergeSegmentTree(segments, { tipTaper: 10 });
+      after.fillStyle = FG;
+      for (const branch of merged) {
+        if (branch.outline.length < 3) continue;
+        after.beginPath();
+        after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
+        for (const p of branch.outline) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
+      }
+    },
+  },
+  {
+    id: 11,
+    name: "Trunk Base Flare",
+    group: "phase-2-junctions",
+    render(before, after) {
+      // Same tree but with a wider trunk base
+      const baseSegments = generateTreeSegments(
+        W / 2, H - PAD, -Math.PI / 2,
+        80, 16, 0, 3,
+        Math.PI / 5,
+      );
+      // Add a flared base segment
+      const flareSegments: TurtleSegment[] = [
+        { x1: W / 2, y1: H - PAD + 15, x2: W / 2, y2: H - PAD, width: 24, depth: 0, order: 0 },
+        ...baseSegments,
+      ];
+
+      clearCanvas(before);
+      addLabel(before, "Bar 11: Before — raw segments, no flare");
+      renderSegmentsBefore(before, baseSegments);
+
+      clearCanvas(after);
+      addLabel(after, "Bar 11: After — merged tree with base flare");
+      const merged = mergeSegmentTree(flareSegments, { tipTaper: 8 });
+      after.fillStyle = FG;
+      for (const branch of merged) {
+        if (branch.outline.length < 3) continue;
+        after.beginPath();
+        after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
+        for (const p of branch.outline) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
       }
     },
   },

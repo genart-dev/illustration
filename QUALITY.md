@@ -56,7 +56,7 @@ far beyond the vertex). Both legs have correct width.
 **Fail**: Spike/arrowhead artifact at the acute join. This is THE failure
 mode that motivates the entire package — the exact artifact visible in
 every current plant render at branch junctions.
-**Reference**: The arrowhead artifacts in hero-bonsai-sumi-e.png.
+**Reference**: The arrowhead artifact at branch junctions in naive stroke rendering.
 This bar exists to prove we've eliminated them.
 
 ### Bar 6 — Three Cap Styles
@@ -152,8 +152,8 @@ at consistent angle. Line spacing varies smoothly with shading value
 Reads as a copper-plate engraving.
 **Fail**: Hatching extends beyond leaf boundary. Spacing is uniform
 (no tonal variation). Lines have visible start/end stubs at boundary.
-**Reference**: Schwere See (Licia He) — this is the ONE existing success
-case. Also: any 18th-century botanical engraving plate.
+**Reference**: Flow-field engraving art (e.g. Licia He's work).
+Also: any 18th-century botanical engraving plate.
 
 ### Bar 15 — Woodcut Bold
 **Render**: Trunk segment (thick, depth 0), rendered with woodcut strategy.
@@ -196,8 +196,8 @@ to bottom. All lines clip at region boundary. No orphan stubs (<3px
 segments). Reads as pencil shading.
 **Fail**: Spacing is uniform (no gradient). Lines extend past boundary.
 Visible gaps at boundary (lines don't reach edge).
-**Reference**: Reference #7 from terrain quality bar — gray rolling hills
-with contour lines, value gradients light-to-dark.
+**Reference**: Pencil landscape shading — gray rolling hills with contour
+lines, value gradients light-to-dark.
 
 ### Bar 19 — Crosshatch Tonal Range
 **Render**: Circle region, crosshatched at 0° and 45°, density from 0.1
@@ -223,8 +223,8 @@ Dots placed outside the polygon boundary.
 shrinking inward. Even spacing. Creates a topographic-map effect.
 **Fail**: Lines follow a fixed angle (not contour). Self-intersecting
 offset contours at concavities.
-**Reference**: Reference #3 from terrain quality bar — mountain with
-contour lines following form.
+**Reference**: Topographic illustration — mountain with contour lines
+following form.
 
 ---
 
@@ -259,8 +259,8 @@ Denser hatching on shadowed faces, sparser on lit faces. Ridge line
 is clean. Reads as a hand-drawn landscape illustration.
 **Fail**: Hatching doesn't follow slope (all lines at same angle).
 No shading variation (uniform density). Ridge line has polygon facets.
-**Reference**: Reference #2 from terrain quality bar — 9-panel mountains
-with hatching following surface normals.
+**Reference**: Hand-drawn landscape illustration — mountain forms with
+hatching following surface normals.
 
 ---
 
