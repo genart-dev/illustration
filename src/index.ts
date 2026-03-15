@@ -76,6 +76,15 @@ export { hatchFill } from "./fill/hatch.js";
 export { crosshatchFill } from "./fill/crosshatch.js";
 export { stippleFill } from "./fill/stipple.js";
 
+// ── Stamp adapter (StrokeProfile → stamp renderer input) ────────────────────
+export {
+  strokeProfileToStamp,
+  strokeProfilesToStamps,
+  type StampPoint,
+  type StampStroke,
+  type StrokeToStampOptions,
+} from "./stamp/adapter.js";
+
 // ── Utilities ───────────────────────────────────────────
 export {
   dist,
