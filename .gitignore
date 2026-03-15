@@ -4,3 +4,7 @@ dist/
 .npmrc
 *.DS_Store
 render-test*.cjs
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/
+yarn.lock
