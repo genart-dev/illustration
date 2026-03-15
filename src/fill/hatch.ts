@@ -85,7 +85,8 @@ export const hatchFill: FillStrategy = {
         const midProj = midX * gradDirX + midY * gradDirY;
         const gradT = Math.max(0, Math.min(1, (midProj - gradMin) / gradRange));
         // gradT=0 → sparse (wide spacing), gradT=1 → dense (tight spacing)
-        localDensityFactor = (1 - config.gradient!.strength) + config.gradient!.strength * gradT;
+        // Scale from (1-strength) to (1+strength) so gradient can push ABOVE base density
+        localDensityFactor = (1 - config.gradient!.strength) + config.gradient!.strength * gradT * 2;
       }
 
       // Draw segments between pairs
