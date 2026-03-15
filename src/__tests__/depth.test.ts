@@ -128,15 +128,17 @@ describe("presets", () => {
     const fg = resolveDepth(0, DEPTH_STANDARD);
     const bg = resolveDepth(1, DEPTH_STANDARD);
     expect(fg.weight).toBe(1);
-    expect(bg.weight).toBeCloseTo(0.2);
+    expect(bg.weight).toBeCloseTo(0.3);
     expect(fg.opacity).toBe(1);
-    expect(bg.opacity).toBeCloseTo(0.25);
+    expect(bg.opacity).toBeCloseTo(0.35);
   });
 
   it("DEPTH_DRAMATIC has stronger contrast", () => {
+    const fg = resolveDepth(0, DEPTH_DRAMATIC);
     const bg = resolveDepth(1, DEPTH_DRAMATIC);
-    expect(bg.weight).toBeCloseTo(0.1);
-    expect(bg.opacity).toBeCloseTo(0.15);
+    expect(fg.weight).toBe(1.2);
+    expect(bg.weight).toBeCloseTo(0.15);
+    expect(bg.opacity).toBeCloseTo(0.2);
   });
 
   it("DEPTH_SUBTLE has gentle falloff", () => {
