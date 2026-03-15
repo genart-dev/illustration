@@ -99,7 +99,7 @@ export function applyDepthToMarks(
 /** Standard atmospheric depth — moderate falloff for general illustration. */
 export const DEPTH_STANDARD: AtmosphericDepthConfig = {
   weight: { near: 1, far: 0.3 },
-  opacity: { near: 1, far: 0.35 },
+  opacity: { near: 1, far: 0.5 },
   density: { near: 1, far: 0.3 },
   detail: { near: 1, far: 0.4 },
   easing: "linear",
@@ -107,15 +107,16 @@ export const DEPTH_STANDARD: AtmosphericDepthConfig = {
 
 /**
  * Dramatic atmospheric depth — strong separation between planes.
- * Foreground is bold, midground clearly lighter, background fades
- * significantly. Linear easing for predictable, visible steps.
+ * Foreground is bold (1.3×), background fades aggressively.
+ * Ease-out easing keeps foreground bold then drops off sharply
+ * so mid and background both feel clearly receded.
  */
 export const DEPTH_DRAMATIC: AtmosphericDepthConfig = {
-  weight: { near: 1.2, far: 0.15 },
-  opacity: { near: 1, far: 0.2 },
-  density: { near: 1.2, far: 0.15 },
+  weight: { near: 1.3, far: 0.1 },
+  opacity: { near: 1, far: 0.15 },
+  density: { near: 1.3, far: 0.1 },
   detail: { near: 1, far: 0.2 },
-  easing: "linear",
+  easing: "ease-out",
 };
 
 /** Subtle atmospheric depth — gentle falloff, elements remain readable. */

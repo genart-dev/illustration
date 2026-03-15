@@ -130,15 +130,15 @@ describe("presets", () => {
     expect(fg.weight).toBe(1);
     expect(bg.weight).toBeCloseTo(0.3);
     expect(fg.opacity).toBe(1);
-    expect(bg.opacity).toBeCloseTo(0.35);
+    expect(bg.opacity).toBeCloseTo(0.5);
   });
 
   it("DEPTH_DRAMATIC has stronger contrast", () => {
     const fg = resolveDepth(0, DEPTH_DRAMATIC);
     const bg = resolveDepth(1, DEPTH_DRAMATIC);
-    expect(fg.weight).toBe(1.2);
-    expect(bg.weight).toBeCloseTo(0.15);
-    expect(bg.opacity).toBeCloseTo(0.2);
+    expect(fg.weight).toBe(1.3);
+    expect(bg.weight).toBeCloseTo(0.1);
+    expect(bg.opacity).toBeCloseTo(0.15);
   });
 
   it("DEPTH_SUBTLE has gentle falloff", () => {
