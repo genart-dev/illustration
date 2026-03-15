@@ -9,7 +9,7 @@
  * Output: references/phase-{n}-{group}/bar-{nn}/before.png, after.png
  */
 
-import { createCanvas, type Canvas } from "@napi-rs/canvas";
+import { createCanvas, type Canvas, ImageData } from "@napi-rs/canvas";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -28,6 +28,7 @@ import {
   stippleFill,
   resolveDepth,
   applyDepthToMarks,
+  strokeProfileToStamp,
   DEPTH_STANDARD,
   DEPTH_DRAMATIC,
   DEPTH_SUBTLE,
@@ -41,6 +42,14 @@ import {
   type TurtleSegment,
   type AtmosphericDepthConfig,
 } from "../src/index.js";
+
+// Polyfill ImageData for plugin-painting's tip-generator (expects browser global)
+(globalThis as any).ImageData = ImageData;
+
+// plugin-painting stamp renderer (direct path — sibling repo)
+import { renderStrokes } from "../../plugin-painting/src/brush/stamp-renderer.js";
+import { BRUSH_PRESETS } from "../../plugin-painting/src/brush/presets.js";
+import type { BrushStroke } from "../../plugin-painting/src/brush/types.js";
 
 // ── Configuration ─────────────────────────────────────────
 
@@ -662,7 +671,14 @@ const bars: BarSpec[] = [
       renderSegmentsBefore(before, baseSegments);
 
       clearCanvas(after);
-      addLabel(after, "Bar 11: After — merged tree + engravingMark");
+
+      // Render all branches to an offscreen canvas so BG-gouge marks from each
+      // branch don't overwrite lines drawn by sibling branches on `after`.
+      const offscreen = createCanvas(W, H);
+      const offCtx = offscreen.getContext("2d");
+      offCtx.fillStyle = BG;
+      offCtx.fillRect(0, 0, W, H);
+
       const rng = mulberry32(1111);
       const merged = mergeSegmentTree(flareSegments, { tipTaper: 8 });
       for (const branch of merged) {
@@ -673,8 +689,12 @@ const bars: BarSpec[] = [
         if (!branchOutline) continue;
         const markCfg: MarkConfig = { density: 0.6, weight: 3, jitter: 0.3 };
         const marks = engravingMark.generateMarks(branchOutline, branchProfile, markCfg, rng);
-        renderMarks(after, marks, FG, BG);
+        renderMarks(offCtx, marks, FG, BG);
       }
+
+      // Composite the finished offscreen onto `after`, then add label on top.
+      after.drawImage(offscreen as unknown as HTMLImageElement, 0, 0);
+      addLabel(after, "Bar 11: After — merged tree + engravingMark (offscreen composite)");
     },
   },
 
@@ -772,17 +792,17 @@ const bars: BarSpec[] = [
     group: "phase-3-marks",
     render(before, after) {
       const profile = marksCurveProfile(1);
-      const rng = mulberry32(88);
       clearCanvas(before);
       addLabel(before, "Bar 16: Before — raw lineTo");
       renderBefore(before, profile);
       clearCanvas(after);
-      addLabel(after, "Bar 16: After — brushMark");
-      const outline = generateStrokeOutline(profile);
-      if (!outline) return;
-      const config: MarkConfig = { density: 0.8, weight: 14, jitter: 0.7 };
-      const marks = brushMark.generateMarks(outline, profile, config, rng);
-      renderMarks(after, marks, FG, BG);
+      addLabel(after, "Bar 16: After — texture-bristle stamp");
+      const stroke = strokeProfileToStamp(profile, {
+        brushId: "texture-bristle",
+        color: FG,
+        seed: 88,
+      }) as BrushStroke;
+      renderStrokes([stroke], BRUSH_PRESETS, after, { x: 0, y: 0, width: W, height: H }, 88);
     },
   },
   {
@@ -1060,13 +1080,11 @@ const bars: BarSpec[] = [
     name: "Brush Weight Comparison",
     group: "phase-3-marks-variations",
     render(before, after) {
-      const rng = mulberry32(500);
-
       clearCanvas(before);
       addLabel(before, "Bar 24: Before — three gestural strokes");
 
       clearCanvas(after);
-      addLabel(after, "Bar 24: After — brushMark, fine/medium/bold");
+      addLabel(after, "Bar 24: After — texture-bristle stamp, fine/medium/bold");
 
       const weights = [4, 10, 20];
       const labels = ["fine", "medium", "bold"];
@@ -1086,11 +1104,12 @@ const bars: BarSpec[] = [
         const profile: StrokeProfile = { points: pts, cap: "round" };
         renderBefore(before, profile);
 
-        const outline = generateStrokeOutline(profile);
-        if (!outline) continue;
-        const config: MarkConfig = { density: 0.8, weight: weights[row]!, jitter: 0.6 };
-        const marks = brushMark.generateMarks(outline, profile, config, rng);
-        renderMarks(after, marks, FG, BG);
+        const stroke = strokeProfileToStamp(profile, {
+          brushId: "texture-bristle",
+          color: FG,
+          seed: 500 + row,
+        }) as BrushStroke;
+        renderStrokes([stroke], BRUSH_PRESETS, after, { x: 0, y: 0, width: W, height: H }, 500 + row);
         after.fillStyle = "#999";
         after.font = "10px monospace";
         after.fillText(labels[row]!, PAD + 4, y - 8);
@@ -1302,18 +1321,37 @@ const bars: BarSpec[] = [
         before.font = "10px monospace";
         before.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 30);
 
-        // After: mark strategy — heavier weights for visibility
-        const outline = generateStrokeOutline(profile);
-        if (!outline) continue;
-        const stratWeights = [6, 7, 5, 5, 8, 14]; // per-strategy optimal weights
-        const config: MarkConfig = {
-          density: 0.8,
-          weight: stratWeights[s] ?? 6,
-          jitter: 0.5,
-          passes: s === 2 ? 4 : undefined,
-        };
-        const marks = strategies[s]!.generateMarks(outline, profile, config, rng);
-        renderMarks(after, marks, FG, BG);
+        // After: stamp for ink (s=1) and brush (s=5); MarkStrategy for the rest
+        if (s === 1) {
+          // ink → ink-pen stamp
+          const stroke = strokeProfileToStamp(profile, {
+            brushId: "ink-pen",
+            color: FG,
+            seed: 999 + s,
+          }) as BrushStroke;
+          renderStrokes([stroke], BRUSH_PRESETS, after, { x: 0, y: 0, width: W, height: H }, 999 + s);
+        } else if (s === 5) {
+          // brush → texture-bristle stamp
+          const stroke = strokeProfileToStamp(profile, {
+            brushId: "texture-bristle",
+            color: FG,
+            seed: 999 + s,
+          }) as BrushStroke;
+          renderStrokes([stroke], BRUSH_PRESETS, after, { x: 0, y: 0, width: W, height: H }, 999 + s);
+        } else {
+          // technical / pencil / engraving / woodcut → MarkStrategy
+          const outline = generateStrokeOutline(profile);
+          if (!outline) continue;
+          const stratWeights = [6, 7, 5, 5, 8, 14]; // per-strategy optimal weights
+          const config: MarkConfig = {
+            density: 0.8,
+            weight: stratWeights[s] ?? 6,
+            jitter: 0.5,
+            passes: s === 2 ? 4 : undefined,
+          };
+          const marks = strategies[s]!.generateMarks(outline, profile, config, rng);
+          renderMarks(after, marks, FG, BG);
+        }
         after.fillStyle = "#999";
         after.font = "10px monospace";
         after.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 25);
