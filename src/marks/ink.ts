@@ -1,18 +1,16 @@
 /**
- * Ink mark strategy — confident single stroke with natural variation.
+ * Ink mark strategy — confident stroke with visible width variation.
  *
- * Quality Bar 12: S-curve rendered with subtle width variation from
- * pressure. Slight darkening at endpoints (ink pooling). Reads as a
- * single gesture, not a computed curve. Fails if perfectly uniform.
- *
- * Based on ink-sketch patterns from plugin-plants: position jitter,
- * ±30% pressure-based width variation, occasional ink pooling dots.
+ * Quality Bar 12: S-curve rendered with clear thick/thin transition
+ * from pressure. Slight darkening at endpoints (ink pooling). Reads as a
+ * single gesture with natural width variation. Fails if perfectly uniform
+ * or if width variation isn't visible.
  */
 
 import type {
   StrokeOutline, StrokeProfile, Mark, MarkConfig, MarkStrategy, Point2D,
 } from "../types.js";
-import { tangent, normalLeft, add, scale, dist } from "../util/vec.js";
+import { tangent, normalLeft } from "../util/vec.js";
 import { cumulativeArcLengths } from "../util/arc-length.js";
 
 export const inkMark: MarkStrategy = {
@@ -32,65 +30,74 @@ export const inkMark: MarkStrategy = {
     const cumLengths = cumulativeArcLengths(points);
     const totalLength = cumLengths[cumLengths.length - 1]!;
 
-    // Main stroke — single confident line with pressure variation
-    const strokePoints: Point2D[] = [];
-    const jitterAmt = config.weight * config.jitter * 0.5;
+    // 1. Filled outline polygon — shows the natural thick/thin width variation
+    // from the stroke profile. This is what makes ink look like ink.
+    {
+      const poly: Point2D[] = [];
+      for (const p of outline.startCap) poly.push(p);
+      for (const p of outline.left) poly.push(p);
+      for (const p of outline.endCap) poly.push(p);
+      for (let i = outline.right.length - 1; i >= 0; i--) poly.push(outline.right[i]!);
 
-    for (let i = 0; i < points.length; i++) {
-      const pt = points[i]!;
-      const t = totalLength > 0 ? cumLengths[i]! / totalLength : 0;
+      if (poly.length >= 3) {
+        // Add slight edge wobble for hand-drawn quality
+        const jitterAmt = config.weight * config.jitter * 0.08;
+        if (jitterAmt > 0) {
+          for (let i = 0; i < poly.length; i++) {
+            poly[i] = {
+              x: poly[i]!.x + (rng() - 0.5) * jitterAmt,
+              y: poly[i]!.y + (rng() - 0.5) * jitterAmt,
+            };
+          }
+        }
 
-      // Position jitter perpendicular to stroke direction
-      let jx = 0;
-      let jy = 0;
-      if (jitterAmt > 0 && i > 0 && i < points.length - 1) {
-        const tan = tangent(points[i - 1]!, points[i + 1]!);
-        const n = normalLeft(tan);
-        const offset = (rng() - 0.5) * jitterAmt;
-        jx = n.x * offset;
-        jy = n.y * offset;
+        marks.push({
+          points: poly,
+          width: 0, // filled polygon
+          opacity: 0.9 + rng() * 0.1,
+        });
       }
-
-      strokePoints.push({ x: pt.x + jx, y: pt.y + jy });
     }
 
-    // Width varies with pressure: slight swell in the middle, thin at ends
-    // Simulates natural ink pen pressure
-    const pressureWidth = (t: number): number => {
-      const pressure = points[Math.min(
-        Math.floor(t * (points.length - 1)),
-        points.length - 1,
-      )]?.pressure ?? (1 - 0.3 * Math.abs(2 * t - 1));
-      return config.weight * (0.7 + 0.6 * pressure * config.density);
-    };
+    // 2. Centerline reinforcement — darker along the center for ink density
+    {
+      const centerPts: Point2D[] = [];
+      const jitterAmt = config.weight * config.jitter * 0.3;
+      for (let i = 0; i < points.length; i++) {
+        const pt = points[i]!;
+        let jx = 0, jy = 0;
+        if (jitterAmt > 0 && i > 0 && i < points.length - 1) {
+          const tan = tangent(points[i - 1]!, points[i + 1]!);
+          const n = normalLeft(tan);
+          const offset = (rng() - 0.5) * jitterAmt;
+          jx = n.x * offset;
+          jy = n.y * offset;
+        }
+        centerPts.push({ x: pt.x + jx, y: pt.y + jy });
+      }
+      marks.push({
+        points: centerPts,
+        width: config.weight * 0.3,
+        opacity: 0.3 + rng() * 0.15,
+      });
+    }
 
-    // Use the average width for the main stroke mark
-    const avgWidth = pressureWidth(0.5);
-    marks.push({
-      points: strokePoints,
-      width: avgWidth,
-      opacity: 0.85 + rng() * 0.15,
-    });
-
-    // Ink pooling at endpoints — small dots where ink gathers
+    // 3. Ink pooling at endpoints
     if (config.density > 0.3 && totalLength > 5) {
-      const poolRadius = config.weight * 0.6;
-      const startPt = strokePoints[0]!;
-      const endPt = strokePoints[strokePoints.length - 1]!;
+      const poolRadius = config.weight * 0.5;
+      const startPt = points[0]!;
+      const endPt = points[points.length - 1]!;
 
-      // Start pool (slight)
       if (rng() < 0.6) {
         marks.push({
-          points: [startPt],
+          points: [{ x: startPt.x, y: startPt.y }],
           width: poolRadius * (0.8 + rng() * 0.4),
           opacity: 0.4 + rng() * 0.3,
         });
       }
-
-      // End pool (more pronounced — pen rests at endpoint)
       if (rng() < 0.8) {
         marks.push({
-          points: [endPt],
+          points: [{ x: endPt.x, y: endPt.y }],
           width: poolRadius * (1.0 + rng() * 0.5),
           opacity: 0.5 + rng() * 0.3,
         });

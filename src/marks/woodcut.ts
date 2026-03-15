@@ -55,12 +55,15 @@ export const woodcutMark: MarkStrategy = {
     // 3. Gouge marks — narrow lines following the branch direction
     // Only on thick enough strokes (avoid jack-o-lantern on thin branches)
     const avgWidth = points.reduce((sum, p) => sum + p.width, 0) / points.length;
-    if (avgWidth < 4 || totalLength < 10) return marks;
+    if (avgWidth < 3 || totalLength < 8) return marks;
 
-    // Number of gouges proportional to width, not too many
-    const gougeCount = Math.min(
-      Math.floor(avgWidth / 3),
-      Math.floor(totalLength * config.density * 0.08),
+    // Number of gouges proportional to width — enough for visible carved texture
+    const gougeCount = Math.max(
+      2,
+      Math.min(
+        Math.floor(avgWidth / 2),
+        Math.floor(totalLength * config.density * 0.12),
+      ),
     );
 
     for (let g = 0; g < gougeCount; g++) {
@@ -68,9 +71,10 @@ export const woodcutMark: MarkStrategy = {
       const offsetFrac = (g + 0.5) / gougeCount - 0.5; // -0.5 to +0.5
       const gougePoints: Point2D[] = [];
 
-      // Start and end along the stroke (not full length — partial cuts)
-      const startT = 0.1 + rng() * 0.3;
-      const endT = 0.6 + rng() * 0.3;
+      // Start and end along the stroke — vary length significantly
+      const startT = 0.05 + rng() * 0.4;
+      const gougeLen = 0.2 + rng() * 0.5; // 20-70% of stroke length
+      const endT = Math.min(0.95, startT + gougeLen);
 
       for (let i = 0; i < points.length; i++) {
         const t = totalLength > 0 ? cumLengths[i]! / totalLength : 0;

@@ -662,16 +662,18 @@ const bars: BarSpec[] = [
       renderSegmentsBefore(before, baseSegments);
 
       clearCanvas(after);
-      addLabel(after, "Bar 11: After — merged tree with base flare");
+      addLabel(after, "Bar 11: After — merged tree + engravingMark");
+      const rng = mulberry32(1111);
       const merged = mergeSegmentTree(flareSegments, { tipTaper: 8 });
-      after.fillStyle = FG;
       for (const branch of merged) {
         if (branch.outline.length < 3) continue;
-        after.beginPath();
-        after.moveTo(branch.outline[0]!.x, branch.outline[0]!.y);
-        for (const p of branch.outline) after.lineTo(p.x, p.y);
-        after.closePath();
-        after.fill();
+        // Use flat caps to avoid dark circles at junction connection points
+        const branchProfile: StrokeProfile = { ...branch.profile, cap: "flat" };
+        const branchOutline = generateStrokeOutline(branchProfile);
+        if (!branchOutline) continue;
+        const markCfg: MarkConfig = { density: 0.6, weight: 3, jitter: 0.3 };
+        const marks = engravingMark.generateMarks(branchOutline, branchProfile, markCfg, rng);
+        renderMarks(after, marks, FG, BG);
       }
     },
   },
@@ -1177,11 +1179,11 @@ const bars: BarSpec[] = [
       clearCanvas(after);
       addLabel(after, "Bar 26: After — crosshatchFill with gradient");
       const config: FillConfig = {
-        density: 0.7,
+        density: 0.85,
         weight: 0.6,
         angle: Math.PI / 6,
         secondaryAngle: -Math.PI / 6,
-        gradient: { angle: 0, strength: 0.9 },
+        gradient: { angle: 0, strength: 0.95 },
       };
       const marks = crosshatchFill.generateFill(region, config, rng);
       renderMarks(after, marks, FG, BG);
@@ -1227,7 +1229,7 @@ const bars: BarSpec[] = [
       for (let i = 0; i < 3; i++) {
         const config: FillConfig = {
           density: densities[i]!,
-          weight: 1.2,
+          weight: 1.5,
           angle: 0,
         };
         const marks = stippleFill.generateFill(ovals[i]!, config, rng);
@@ -1271,14 +1273,14 @@ const bars: BarSpec[] = [
         const cx = PAD + col * cellW + cellW / 2;
         const cy = 30 + row * cellH + cellH / 2;
 
-        // Build a small S-curve in each cell
+        // Build a small S-curve in each cell — thicker for more visible marks
         const pts: StrokePoint[] = [];
-        for (let i = 0; i <= 20; i++) {
-          const t = i / 20;
+        for (let i = 0; i <= 24; i++) {
+          const t = i / 24;
           pts.push({
-            x: cx - cellW * 0.35 + t * cellW * 0.7,
-            y: cy + 15 * Math.sin(t * Math.PI * 2),
-            width: 3 + 5 * Math.sin(t * Math.PI),
+            x: cx - cellW * 0.38 + t * cellW * 0.76,
+            y: cy + 18 * Math.sin(t * Math.PI * 2),
+            width: 5 + 8 * Math.sin(t * Math.PI),
             depth: 2,
             pressure: 0.3 + 0.7 * Math.sin(t * Math.PI),
           });
@@ -1290,7 +1292,7 @@ const bars: BarSpec[] = [
 
         // Before: raw stroke
         before.strokeStyle = FG;
-        before.lineWidth = 6;
+        before.lineWidth = 8;
         before.lineCap = "round";
         before.beginPath();
         before.moveTo(pts[0]!.x, pts[0]!.y);
@@ -1298,16 +1300,17 @@ const bars: BarSpec[] = [
         before.stroke();
         before.fillStyle = "#999";
         before.font = "10px monospace";
-        before.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 25);
+        before.fillText(stratLabels[s]!, cx - cellW * 0.35, cy - 30);
 
-        // After: mark strategy
+        // After: mark strategy — heavier weights for visibility
         const outline = generateStrokeOutline(profile);
         if (!outline) continue;
+        const stratWeights = [6, 7, 5, 5, 8, 14]; // per-strategy optimal weights
         const config: MarkConfig = {
-          density: 0.7,
-          weight: s === 5 ? 10 : 4,
+          density: 0.8,
+          weight: stratWeights[s] ?? 6,
           jitter: 0.5,
-          passes: s === 2 ? 3 : undefined,
+          passes: s === 2 ? 4 : undefined,
         };
         const marks = strategies[s]!.generateMarks(outline, profile, config, rng);
         renderMarks(after, marks, FG, BG);
@@ -1540,6 +1543,14 @@ const bars: BarSpec[] = [
       for (const o of ovals) {
         const region = leafPolygon(o.cx, o.cy, o.rx, o.ry);
         const resolved = resolveDepth(o.depth, depthConfig);
+        // White fill for occlusion — closer ovals cover farther ones
+        after.fillStyle = BG;
+        after.beginPath();
+        after.moveTo(region[0]!.x, region[0]!.y);
+        for (const p of region) after.lineTo(p.x, p.y);
+        after.closePath();
+        after.fill();
+        // Hatching
         const config: FillConfig = {
           density: 0.6 * resolved.density,
           weight: 0.6 * resolved.weight,
@@ -1580,8 +1591,8 @@ const bars: BarSpec[] = [
 
       // Three branch strokes crossing at different depths
       const branches = [
-        { depth: 0.85, y: H * 0.35, angle: -0.15, label: "bg" },
-        { depth: 0.35, y: H * 0.5, angle: 0.08, label: "mid" },
+        { depth: 0.8, y: H * 0.35, angle: -0.15, label: "bg" },
+        { depth: 0.5, y: H * 0.5, angle: 0.08, label: "mid" },
         { depth: 0, y: H * 0.6, angle: -0.05, label: "fg" },
       ];
 
@@ -1653,8 +1664,8 @@ const bars: BarSpec[] = [
       ];
 
       for (const preset of presets) {
-        const depths = [0, 0.4, 0.8];
-        // Draw 3 ovals at each preset position
+        const depths = [0, 0.4, 0.7];
+        // Draw 3 ovals at each preset position, back-to-front
         for (let i = depths.length - 1; i >= 0; i--) {
           const d = depths[i]!;
           const resolved = resolveDepth(d, preset.config);
@@ -1670,7 +1681,14 @@ const bars: BarSpec[] = [
           before.closePath();
           before.stroke();
 
-          // After: depth-modulated
+          // After: white fill for occlusion + depth-modulated hatching
+          after.fillStyle = BG;
+          after.beginPath();
+          after.moveTo(region[0]!.x, region[0]!.y);
+          for (const p of region) after.lineTo(p.x, p.y);
+          after.closePath();
+          after.fill();
+
           const fillCfg: FillConfig = {
             density: 0.7 * resolved.density,
             weight: 0.7 * resolved.weight,
