@@ -8,3 +8,4 @@ render-test*.cjs
 .pnp.loader.mjs
 .yarn/
 yarn.lock
+package-lock.json
